@@ -8,6 +8,8 @@ title: Skills
 
 Skills are reusable code patterns that compose MCP tools to accomplish specific tasks. They allow agents to build up a toolbox of higher-level operations. Agent Codemode integrates with the [agent-skills](https://github.com/datalayer/agent-skills) package for comprehensive skill management.
 
+Skills APIs live in agent-skills. Import skill managers and helpers from `agent_skills` (there is no supported `agent_codemode.skills` module).
+
 ## How It Works
 
 ```
@@ -19,7 +21,7 @@ Skills are reusable code patterns that compose MCP tools to accomplish specific 
 └─────────────────┘     └─────────────────┘     └─────────────────────────────┘
 ```
 
-1. **Create** - Write skill files in `skills/` directory or save via `SimpleSkillsManager`
+1. **Create** - Write skill files in `skills/` directory or save via `agent_skills.SimpleSkillsManager`
 2. **Discover** - Agent Codemode discovers all available skills
 3. **Load** - Skills are loaded as callable Python functions
 4. **Use** - Import and call skills like any Python module
@@ -63,6 +65,119 @@ async def batch_process(input_dir: str, output_dir: str) -> dict:
         processed += 1
     
     return {"processed": processed}
+```
+
+## Skills as Standalone CLI Tools
+
+Skills can also be designed as standalone command-line tools that can be run independently:
+
+```python
+#!/usr/bin/env python
+# skills/analyze_file.py
+"""
+Standalone CLI tool that can be run with: python skills/analyze_file.py <file-path>
+This demonstrates a skill that can be invoked directly from the command line.
+"""
+import asyncio
+import sys
+import json
+
+async def analyze_file(file_path: str) -> dict:
+    """Analyze a file and return statistics."""
+    from generated.servers.filesystem import read_file
+    
+    content = await read_file({"path": file_path})
+    lines = content.split('\n')
+    word_count = len(content.split())
+    char_count = len(content)
+    
+    return {
+        "lines": len(lines),
+        "words": word_count,
+        "chars": char_count,
+        "blank_lines": sum(1 for line in lines if line.strip() == '')
+    }
+
+# Run if called directly
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python analyze_file.py <file-path>")
+        sys.exit(1)
+    
+    file_path = sys.argv[1]
+    result = asyncio.run(analyze_file(file_path))
+    print(json.dumps(result, indent=2))
+```
+
+Run it directly:
+
+```bash
+python skills/analyze_file.py /data/myfile.txt
+# Output: {"lines": 42, "words": 256, "chars": 1024, "blank_lines": 5}
+```
+
+Or import and use it in executed code:
+
+```python
+from skills.analyze_file import analyze_file
+stats = await analyze_file("/data/myfile.txt")
+print(f"File has {stats['lines']} lines")
+```
+
+## Helper Utilities as Skills
+
+Skills can also provide reusable helper utilities for other skills:
+
+```python
+# skills/helpers.py
+"""Helper utilities for skill composition."""
+
+async def wait_for(
+    condition,
+    interval_seconds: float = 1.0,
+    timeout_seconds: float = float('inf')
+) -> None:
+    """Wait for an async condition to become true."""
+    import time
+    start_time = time.time()
+    
+    while True:
+        result = await condition()
+        if result:
+            return
+        
+        if time.time() - start_time > timeout_seconds:
+            raise TimeoutError(f"Timeout waiting for condition after {timeout_seconds}s")
+        
+        await asyncio.sleep(interval_seconds)
+
+
+async def retry(fn, max_attempts: int = 3, delay_seconds: float = 1.0):
+    """Retry a function until it succeeds or max attempts reached."""
+    last_error = None
+    
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return await fn()
+        except Exception as e:
+            last_error = e
+            if attempt < max_attempts:
+                await asyncio.sleep(delay_seconds)
+    
+    raise RuntimeError(f"Failed after {max_attempts} attempts: {last_error}")
+```
+
+Use these helpers in other skills:
+
+```python
+from skills.helpers import retry, wait_for
+from generated.servers.web import fetch_url
+
+# Retry a flaky API call
+data = await retry(lambda: fetch_url({"url": "https://api.example.com/data"}))
+
+# Wait for a condition
+await wait_for(lambda: check_file_exists("/output/result.json"))
 ```
 
 ## Using Skills in Executed Code

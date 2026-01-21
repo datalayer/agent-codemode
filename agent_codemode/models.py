@@ -4,7 +4,7 @@
 
 """Models for Agent Codemode.
 
-These models define tool definitions, skill metadata, and execution contexts.
+These models define tool definitions and execution contexts.
 """
 
 from dataclasses import dataclass, field
@@ -106,33 +106,6 @@ class ToolCallResult:
     def __repr__(self) -> str:
         status = "success" if self.success else f"error={self.error}"
         return f"ToolCallResult({self.tool_name}, {status})"
-
-
-@dataclass
-class Skill:
-    """A reusable skill composed of tool calls.
-
-    Skills are saved code patterns that compose multiple tools
-    to accomplish a specific task.
-
-    Attributes:
-        name: Unique skill name.
-        description: Human-readable description.
-        code: The Python code implementing the skill.
-        tools_used: List of tool names used by this skill.
-        created_at: Unix timestamp when created.
-        updated_at: Unix timestamp when last updated.
-    """
-
-    name: str
-    description: str
-    code: str
-    tools_used: list[str] = field(default_factory=list)
-    created_at: float = 0.0
-    updated_at: float = 0.0
-
-    def __repr__(self) -> str:
-        return f"Skill(name={self.name!r}, tools={len(self.tools_used)})"
 
 
 @dataclass

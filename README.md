@@ -149,6 +149,8 @@ print(execution.success)
 
 Skills are Python files that compose tools into reusable operations. This allows agents to evolve their own toolbox by saving useful code patterns. Skills functionality is provided by the [agent-skills](https://github.com/datalayer/agent-skills) package.
 
+Note: Skills APIs are owned by agent-skills. Import skill utilities from `agent_skills` (the `agent_codemode.skills` module is not supported).
+
 #### Creating Skills as Code Files
 
 The primary pattern is skills as Python files in a `skills/` directory:
@@ -319,7 +321,38 @@ python -m agent_codemode.server --workspace ./workspace
 | `list_skills` / `delete_skill` | Skill management |
 | `add_mcp_server` | Dynamically add servers |
 
-### Pydantic AI Integration
+## Recommended System Prompt
+
+When building an agent that uses Codemode, use this system prompt pattern:
+
+```text
+You are an AI assistant with access to MCP tools via Code Mode.
+
+## Available Meta-Tools
+- **list_tool_names** - Fast listing of tool names
+- **search_tools** - AI-powered tool discovery (returns full definitions)
+- **get_tool_details** - Get schema for a specific tool
+- **execute_code** - Execute Python code in a sandboxed environment
+
+## Execution Model
+ALL tool execution must go through execute_code. Write Python code that imports 
+and uses the generated tool bindings:
+
+```python
+from generated.servers.filesystem import read_file
+content = await read_file({"path": "/data/config.json"})
+print(content)
+```
+
+## Workflow
+1. Discover tools using search_tools or list_tool_names
+2. Write Python code that imports tools from generated.servers.<name>
+3. Execute using execute_code
+```
+
+See the [Getting Started guide](https://agent-codemode.datalayer.tech/getting-started) for a complete system prompt example.
+
+## Key Patterns
 
 ### Tool Discovery
 

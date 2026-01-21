@@ -30,7 +30,7 @@ from mcp.server.lowlevel import Server
 
 from .composition.executor import CodeModeExecutor
 from .discovery.registry import ToolRegistry
-from .models import CodeModeConfig, SearchResult, Skill
+from .models import CodeModeConfig, SearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +124,37 @@ Example:
                     "default": True,
                     "description": "Whether to include tools marked defer_loading.",
                 },
+            },
+        },
+    ),
+    types.Tool(
+        name="list_tool_names",
+        description="""List available tool names.
+
+Fast way to see what tools exist without loading full definitions.
+Useful for checking if specific tools are available.""",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "server": {
+                    "type": "string",
+                    "description": "Optional server name to filter by",
+                },
+                "keywords": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Optional keywords to filter by",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of names (default: 100)",
+                    "default": 100,
+                },
+                    "include_deferred": {
+                        "type": "boolean",
+                        "description": "Whether to include tools marked defer_loading.",
+                        "default": False,
+                    },
             },
         },
     ),
@@ -413,6 +444,30 @@ async def handle_list_servers(arguments: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+async def handle_list_tool_names(arguments: dict[str, Any]) -> dict[str, Any]:
+    """List available tool names."""
+    server = arguments.get("server")
+    keywords = arguments.get("keywords")
+    limit = arguments.get("limit", 100)
+    include_deferred = arguments.get("include_deferred", False)
+
+    registry = get_registry()
+    names = registry.list_tool_names(
+        server=server,
+        keywords=keywords,
+        limit=limit,
+        include_deferred=include_deferred,
+    )
+    total = len(registry.list_tools(server=server, include_deferred=include_deferred))
+    
+    return {
+        "tool_names": names,
+        "returned": len(names),
+        "total": total,
+        "truncated": len(names) < total,
+    }
+
+
 async def handle_get_tool_details(arguments: dict[str, Any]) -> dict[str, Any]:
     """Get detailed information about a specific tool."""
     tool_name = arguments["tool_name"]
@@ -506,7 +561,7 @@ async def handle_call_tool(arguments: dict[str, Any]) -> dict[str, Any]:
 
 async def handle_save_skill(arguments: dict[str, Any]) -> dict[str, Any]:
     """Save a reusable skill (code-based tool composition)."""
-    from agent_skills import SimpleSkillsManager, SimpleSkill
+    from agent_skills.simple import SimpleSkill, SimpleSkillsManager
     
     name = arguments["name"]
     code = arguments["code"]
@@ -579,7 +634,7 @@ async def handle_run_skill(arguments: dict[str, Any]) -> dict[str, Any]:
 
 async def handle_list_skills(arguments: dict[str, Any]) -> dict[str, Any]:
     """List available skills."""
-    from agent_skills import SimpleSkillsManager
+    from agent_skills.simple import SimpleSkillsManager
     
     tags = arguments.get("tags")
 
@@ -607,7 +662,7 @@ async def handle_list_skills(arguments: dict[str, Any]) -> dict[str, Any]:
 
 async def handle_delete_skill(arguments: dict[str, Any]) -> dict[str, Any]:
     """Delete a saved skill."""
-    from agent_skills import SimpleSkillsManager
+    from agent_skills.simple import SimpleSkillsManager
     
     name = arguments["name"]
 
@@ -657,13 +712,11 @@ async def handle_add_mcp_server(arguments: dict[str, Any]) -> dict[str, Any]:
     if url:
         config = MCPServerConfig(
             name=name,
-            transport="http",
             url=url,
         )
     elif command:
         config = MCPServerConfig(
             name=name,
-            transport="stdio",
             command=command,
             args=args,
         )
@@ -676,7 +729,7 @@ async def handle_add_mcp_server(arguments: dict[str, Any]) -> dict[str, Any]:
     
     try:
         registry.add_server(config)
-        await registry.discover_tools(name)
+        await registry.discover_server(name)
         
         tools = registry.list_tools(server=name)
         
@@ -699,6 +752,7 @@ async def handle_add_mcp_server(arguments: dict[str, Any]) -> dict[str, Any]:
 
 TOOL_HANDLERS = {
     "search_tools": handle_search_tools,
+    "list_tool_names": handle_list_tool_names,
     "list_servers": handle_list_servers,
     "get_tool_details": handle_get_tool_details,
     "execute_code": handle_execute_code,
@@ -719,7 +773,10 @@ TOOL_HANDLERS = {
 @mcp.list_tools()
 async def list_tools() -> list[types.Tool]:
     """Return the list of available tools."""
-    return TOOLS
+    config = _config or CodeModeConfig()
+    if config.allow_direct_tool_calls:
+        return TOOLS
+    return [tool for tool in TOOLS if tool.name != "call_tool"]
 
 
 @mcp.call_tool()

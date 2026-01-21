@@ -36,7 +36,6 @@ from .models import (
     MCPServerConfig,
     SearchResult,
     ServerInfo,
-    Skill,
     ToolCallResult,
     ToolDefinition,
     ToolParameter,
@@ -46,6 +45,7 @@ from .proxy.meta_tools import MetaToolProvider
 
 # Import skills functionality from agent_skills
 from agent_skills import (
+    Skill,
     SkillDirectory,
     SkillFile,
     SkillsManager,
@@ -73,6 +73,7 @@ __all__ = [
     "MCPClient",
     "MetaToolProvider",
     # Skills (from agent_skills)
+    "Skill",
     "SkillsManager",
     "SimpleSkill",
     "SimpleSkillsManager",
@@ -97,7 +98,6 @@ __all__ = [
     "ToolDefinition",
     "ToolParameter",
     "ToolCallResult",
-    "Skill",
     "MCPServerConfig",
     "CodeModeConfig",
     "SearchResult",

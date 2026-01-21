@@ -409,7 +409,7 @@ async def __user_code__():
         Returns:
             Execution result.
         """
-        from agent_skills import SimpleSkillsManager
+        from agent_skills.simple import SimpleSkillsManager
 
         manager = SimpleSkillsManager(self.config.skills_path)
         skill = manager.load_skill(skill_name)
