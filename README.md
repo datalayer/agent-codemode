@@ -149,7 +149,7 @@ print(execution.success)
 
 Skills are Python files that compose tools into reusable operations. This allows agents to evolve their own toolbox by saving useful code patterns. Skills functionality is provided by the [agent-skills](https://github.com/datalayer/agent-skills) package.
 
-Note: Skills APIs are owned by agent-skills. Import skill utilities from `agent_skills` (the `agent_codemode.skills` module is not supported).
+Note: Skills APIs are owned by agent-skills. Import skill utilities from `agent_skills`.
 
 #### Creating Skills as Code Files
 
