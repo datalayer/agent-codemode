@@ -1,0 +1,105 @@
+# Copyright (c) 2025-2026 Datalayer, Inc.
+#
+# BSD 3-Clause License
+
+"""Agent Codemode - Programmatic MCP tool calling and composition.
+
+This package enables:
+- Progressive tool discovery
+- Programmatic tool composition (code that chains tools)
+- State persistence
+- Skill building (reusable tool patterns)
+
+Example:
+    from agent_codemode import ToolRegistry, CodeModeExecutor, MCPServerConfig
+
+    # Set up registry with MCP servers
+    registry = ToolRegistry()
+    registry.add_server(MCPServerConfig(name="bash", url="http://localhost:8001"))
+    await registry.discover_all()
+
+    # Execute code that composes tools
+    async with CodeModeExecutor(registry) as executor:
+        result = await executor.execute('''
+            from generated.servers.bash import ls, cat
+
+            files = await ls({"path": "/tmp"})
+            print(f"Found {len(files)} files")
+        ''')
+"""
+
+from .composition.executor import CodeModeExecutor
+from .discovery.codegen import PythonCodeGenerator
+from .discovery.registry import ToolRegistry
+from .models import (
+    CodeModeConfig,
+    MCPServerConfig,
+    SearchResult,
+    ServerInfo,
+    Skill,
+    ToolCallResult,
+    ToolDefinition,
+    ToolParameter,
+)
+from .proxy.mcp_client import MCPClient
+from .proxy.meta_tools import MetaToolProvider
+
+# Import skills functionality from agent_skills
+from agent_skills import (
+    SkillDirectory,
+    SkillFile,
+    SkillsManager,
+    SimpleSkill,
+    SimpleSkillsManager,
+    SimpleSkillManager,  # Alias for backward compatibility
+    SkillManager,  # Alias for backward compatibility
+    setup_skills_directory,
+    wait_for,
+    retry,
+    run_with_timeout,
+    parallel,
+    RateLimiter,
+)
+
+from .server import mcp as codemode_server, configure as configure_server
+from .toolset import CodemodeToolset, PYDANTIC_AI_AVAILABLE
+
+__all__ = [
+    # Core components
+    "ToolRegistry",
+    "CodeModeExecutor",
+    "PythonCodeGenerator",
+    # Proxy
+    "MCPClient",
+    "MetaToolProvider",
+    # Skills (from agent_skills)
+    "SkillsManager",
+    "SimpleSkill",
+    "SimpleSkillsManager",
+    "SimpleSkillManager",  # Alias for backward compatibility
+    "SkillManager",  # Alias for backward compatibility
+    "SkillDirectory",
+    "SkillFile",
+    "setup_skills_directory",
+    # Helpers (from agent_skills)
+    "wait_for",
+    "retry",
+    "run_with_timeout",
+    "parallel",
+    "RateLimiter",
+    # MCP Server
+    "codemode_server",
+    "configure_server",
+    # Pydantic AI Toolset
+    "CodemodeToolset",
+    "PYDANTIC_AI_AVAILABLE",
+    # Models
+    "ToolDefinition",
+    "ToolParameter",
+    "ToolCallResult",
+    "Skill",
+    "MCPServerConfig",
+    "CodeModeConfig",
+    "SearchResult",
+    "ServerInfo",
+]

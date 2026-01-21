@@ -1,0 +1,248 @@
+---
+title: Tool Discovery
+sidebar_position: 1
+---
+
+# Tool Discovery
+
+Agent Codemode provides progressive tool discovery to efficiently find relevant tools from large catalogs.
+
+## The Problem with Large Tool Catalogs
+
+When you have many MCP servers with hundreds of tools, loading all tool definitions upfront is problematic:
+
+- **Token overhead**: LLM context gets filled with tool schemas
+- **Decision fatigue**: Too many options confuse the model
+- **Slow startup**: Fetching all tools takes time
+
+## The Tool Search Tool
+
+The `search_tools` function enables progressive discovery - find relevant tools without loading everything:
+
+```python
+from agent_codemode import ToolRegistry
+
+registry = ToolRegistry()
+# ... add servers ...
+await registry.discover_all()
+
+# Search for tools by description (includes deferred tools by default)
+result = await registry.search_tools("file operations", limit=10, include_deferred=True)
+
+for tool in result.tools:
+    print(f"{tool.name}: {tool.description}")
+    print(f"  Server: {tool.server_name}")
+    print(f"  Schema: {tool.input_schema}")
+    print(f"  Output: {tool.output_schema}")
+    print(f"  Examples: {tool.input_examples[:2]}")
+```
+
+### Search Parameters
+
+```python
+result = await registry.search_tools(
+    query="read and write files",  # Natural language description
+    server="filesystem",            # Optional: filter by server
+    limit=10,                       # Maximum results
+    include_deferred=True,          # Include deferred tools
+)
+```
+
+### Search Results
+
+```python
+{
+    "tools": [
+        {
+            "name": "filesystem__read_file",
+            "description": "Read contents of a file",
+            "server": "filesystem",
+            "input_schema": {...},
+            "output_schema": {...},
+            "input_examples": [...],
+            "defer_loading": false
+        },
+        # ...
+    ],
+    "total": 15,       # Total matches
+    "has_more": True   # More results available
+}
+```
+
+## Tool Registry
+
+The `ToolRegistry` is the central hub for managing MCP servers and their tools.
+
+### Adding Servers
+
+```python
+from agent_codemode import ToolRegistry, MCPServerConfig
+
+registry = ToolRegistry()
+
+# Stdio transport (subprocess)
+registry.add_server(MCPServerConfig(
+    name="filesystem",
+    transport="stdio",
+    command="npx",
+    args=["-y", "@anthropic/mcp-server-filesystem", "/data"]
+))
+
+# HTTP transport (network)
+registry.add_server(MCPServerConfig(
+    name="api",
+    transport="http",
+    url="http://localhost:8001"
+))
+
+# With authentication
+registry.add_server(MCPServerConfig(
+    name="secure",
+    transport="http",
+    url="https://api.example.com",
+    headers={"Authorization": "Bearer token123"}
+))
+```
+
+### Discovering Tools
+
+```python
+# Discover from all servers
+tools_by_server = await registry.discover_all()
+
+for server_name, tools in tools_by_server.items():
+    print(f"{server_name}: {len(tools)} tools")
+
+# Get a specific tool
+tool = registry.get_tool("filesystem__read_file")
+print(tool.input_schema)
+```
+
+### Listing Tools
+
+```python
+# List all tools (deferred tools excluded by default)
+all_tools = registry.list_tools()
+
+# Include deferred tools
+all_tools = registry.list_tools(include_deferred=True)
+
+# List tools from a specific server
+fs_tools = registry.list_tools(server="filesystem")
+
+# Get tool details
+tool = registry.get_tool_details("filesystem__read_file")
+print(f"Name: {tool.name}")
+print(f"Description: {tool.description}")
+print(f"Input Schema: {tool.input_schema}")
+print(f"Output Schema: {tool.output_schema}")
+print(f"Examples: {tool.input_examples}")
+```
+
+## Server Management
+
+### Listing Servers
+
+```python
+# Get all connected servers
+servers = registry.list_servers()
+
+for server in servers:
+    print(f"{server.name}: {server.tool_count} tools")
+    print(f"  URL: {server.url}")
+    print(f"  Status: {server.status}")
+```
+
+### Removing Servers
+
+```python
+# Remove a server
+registry.remove_server("old-server")
+```
+
+### Server Status
+
+```python
+# Check server health
+status = await registry.check_server("filesystem")
+print(f"Connected: {status.connected}")
+print(f"Latency: {status.latency_ms}ms")
+```
+
+## Generated Tool Bindings
+
+When you set up the executor, it generates Python modules with async functions for each tool:
+
+```python
+# After executor.setup(), you can import tools:
+from generated.servers.filesystem import read_file, write_file, list_directory
+from generated.servers.bash import run_command
+
+# Use them as async functions
+content = await read_file({"path": "/tmp/file.txt"})
+await write_file({"path": "/tmp/out.txt", "content": content})
+```
+
+### Generated Code Structure
+
+```
+generated/
+├── __init__.py
+└── servers/
+    ├── __init__.py
+    ├── filesystem.py
+    ├── bash.py
+    └── web.py
+```
+
+Each server module contains async functions matching its tools:
+
+```python
+# generated/servers/filesystem.py
+async def read_file(params: dict) -> str:
+    """Read contents of a file."""
+    ...
+
+async def write_file(params: dict) -> dict:
+    """Write content to a file."""
+    ...
+```
+
+## Best Practices
+
+### 1. Progressive Discovery
+
+Start with `search_tools`, then get details for specific tools:
+
+```python
+# First, find relevant tools
+results = await registry.search_tools("data analysis")
+
+# Then get full details for the ones you need
+for tool in results.tools[:3]:
+    details = registry.get_tool_details(tool.name)
+    print(details.input_schema)
+```
+
+### 2. Cache Tool Information
+
+Tool schemas don't change often - cache them:
+
+```python
+# Discover once at startup
+await registry.discover_all()
+
+# Then use the registry throughout your application
+# Tools are cached in memory
+```
+
+### 3. Handle Server Failures
+
+```python
+try:
+    await registry.discover_all()
+except Exception as e:
+    # Some servers may fail - check which ones succeeded
+    working_tools = registry.list_tools()
+    print(f"Discovered {len(working_tools)} tools despite errors")
+```

@@ -1,0 +1,213 @@
+---
+title: Concepts
+sidebar_position: 2
+---
+
+# Concepts
+
+This page explains the core concepts behind Code Mode and why it's a powerful paradigm for AI agents.
+
+## The Traditional Approach
+
+Traditional AI agents interact with tools through individual function calls:
+
+```
+Agent → Tool Call 1 → Result 1
+Agent → Tool Call 2 → Result 2
+Agent → Tool Call 3 → Result 3
+...
+```
+
+Each tool call requires:
+1. LLM inference to decide the next action
+2. Parsing the result
+3. Another LLM inference for the next step
+
+This creates **latency** and **cost** that scales linearly with complexity.
+
+## The Code Mode Approach
+
+Code Mode inverts this pattern. Instead of making individual tool calls, the agent writes **code** that composes tools:
+
+```
+Agent → Generate Code → Execute Code → Final Result
+         (contains multiple tool calls)
+```
+
+Benefits:
+- **Single inference** - One code generation instead of many tool decisions
+- **Parallel execution** - Tools can run concurrently with `asyncio.gather`
+- **Rich logic** - Loops, conditionals, error handling in familiar Python
+- **Composability** - Code patterns can be saved and reused as Skills
+
+## Key Concepts
+
+### Tool Registry
+
+The `ToolRegistry` manages connections to MCP servers and discovers their tools:
+
+```python
+from agent_codemode import ToolRegistry
+
+registry = ToolRegistry()
+registry.add_server("fs", {"command": "npx", "args": ["@anthropic-ai/mcp-server-filesystem"]})
+await registry.discover_all()
+
+# Registry now knows all tools from all servers
+print(registry.tool_count)  # e.g., 15 tools
+```
+
+### Generated Bindings
+
+Agent Codemode generates Python code that wraps MCP tools:
+
+```python
+# Generated: generated/servers/filesystem.py
+async def read_file(arguments: dict) -> str:
+    """Read file contents.
+    
+    Args:
+        path: File path to read
+    
+    Returns:
+        File contents as string
+    """
+    return await _call_tool("filesystem", "read_file", arguments)
+```
+
+Agents import these bindings in their code:
+
+```python
+from generated.servers.filesystem import read_file, write_file
+```
+
+### Code Executor
+
+The `CodeModeExecutor` runs agent-generated Python code in a sandbox:
+
+```python
+from agent_codemode import CodeModeExecutor
+
+executor = CodeModeExecutor(registry)
+await executor.setup()
+
+result = await executor.execute("""
+    from generated.servers.filesystem import read_file
+    content = await read_file({"path": "/data.txt"})
+    print(f"Read {len(content)} bytes")
+""")
+```
+
+### Skills
+
+Skills are saved code patterns that can be reused:
+
+```python
+# skills/word_count.py
+async def word_count(path: str) -> int:
+    from generated.servers.filesystem import read_file
+    content = await read_file({"path": path})
+    return len(content.split())
+```
+
+Agents can:
+1. Discover existing skills
+2. Use skills in their code
+3. Create new skills from successful code
+
+## Execution Model
+
+### Sandbox Isolation
+
+Code runs in an isolated environment:
+
+- Separate process/container
+- Limited imports (no `os.system`, etc.)
+- Timeout enforcement
+- Resource limits
+
+### Tool Call Flow
+
+When code calls a generated binding:
+
+```
+Sandbox → Generated Binding → Tool Registry → MCP Server → Tool Execution → Result
+```
+
+The binding handles:
+- Serializing arguments
+- Calling the MCP server
+- Deserializing the response
+- Raising exceptions on errors
+
+### State Management
+
+Variables persist within a single executor session:
+
+```python
+# Execution 1
+await executor.execute("data = []")
+
+# Execution 2
+await executor.execute("data.append('item')")
+
+# Execution 3
+result = await executor.execute("print(len(data))")  # Prints: 1
+```
+
+## When to Use Code Mode
+
+### Good Use Cases
+
+- **Multi-step workflows** - Operations involving many sequential or parallel tool calls
+- **Data processing** - Transforming, filtering, aggregating data from multiple sources
+- **Complex logic** - Operations requiring loops, conditionals, error handling
+- **Batch operations** - Processing many files, records, or items
+
+### Less Ideal Cases
+
+- **Simple queries** - Single tool calls where direct invocation is simpler
+- **Highly interactive** - Operations requiring real-time human feedback
+- **Long-running** - Operations that need to run for hours (consider breaking into smaller chunks)
+
+## Comparison with Other Approaches
+
+| Approach | Tool Calls | Logic | Latency | Cost |
+|----------|------------|-------|---------|------|
+| Traditional | Many individual | LLM decides each | High | High |
+| Code Mode | Batched in code | Python code | Low | Low |
+| Workflows | Pre-defined | Fixed DAG | Low | Low |
+
+Code Mode offers the flexibility of traditional agents with the efficiency of pre-defined workflows.
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      AI Agent                            │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐      │
+│  │search_tools │  │execute_code │  │ list_skills │      │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘      │
+└─────────┼────────────────┼────────────────┼─────────────┘
+          │                │                │
+          v                v                v
+┌─────────────────────────────────────────────────────────┐
+│                   Agent Codemode                           │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐      │
+│  │Tool Registry│  │  Executor   │  │Skill Manager│      │
+│  └──────┬──────┘  └──────┬──────┘  └─────────────┘      │
+│         │                │                               │
+│         v                v                               │
+│  ┌─────────────────────────────────────────────┐        │
+│  │            Generated Bindings                │        │
+│  │  from generated.servers.X import tool       │        │
+│  └──────────────────────┬──────────────────────┘        │
+└─────────────────────────┼───────────────────────────────┘
+                          │
+          ┌───────────────┼───────────────┐
+          v               v               v
+    ┌──────────┐   ┌──────────┐   ┌──────────┐
+    │MCP Server│   │MCP Server│   │MCP Server│
+    │filesystem│   │   web    │   │ database │
+    └──────────┘   └──────────┘   └──────────┘
+```

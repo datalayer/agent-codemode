@@ -1,0 +1,239 @@
+---
+title: Skills
+sidebar_position: 5
+---
+
+# Skills
+
+Skills are reusable code patterns that compose MCP tools to accomplish specific tasks. Agent Codemode integrates with the [agent-skills](https://github.com/datalayer/agent-skills) package to provide comprehensive skill management.
+
+## Overview
+
+Skills allow AI agents to:
+
+- **Save useful patterns**: Store code that works well for reuse
+- **Build a toolbox**: Accumulate capabilities over time
+- **Compose operations**: Chain multiple tools into higher-level functions
+- **Share knowledge**: Export skills for use by other agents
+
+## Skills as Code Files
+
+The primary pattern is organizing skills as Python files in a `skills/` directory:
+
+```python
+# skills/batch_process.py
+"""Process all files in a directory."""
+
+async def batch_process(input_dir: str, output_dir: str) -> dict:
+    """Process all files in a directory.
+    
+    Args:
+        input_dir: Input directory path.
+        output_dir: Output directory path.
+    
+    Returns:
+        Processing statistics.
+    """
+    from generated.servers.filesystem import list_directory, read_file, write_file
+    
+    entries = await list_directory({"path": input_dir})
+    processed = 0
+    
+    for entry in entries.get("entries", []):
+        content = await read_file({"path": f"{input_dir}/{entry}"})
+        # Process content...
+        await write_file({"path": f"{output_dir}/{entry}", "content": content.upper()})
+        processed += 1
+    
+    return {"processed": processed}
+```
+
+## Using Skills in Executed Code
+
+Skills are imported and called like any Python module within `execute_code`:
+
+```python
+# In executed code
+from skills.batch_process import batch_process
+
+result = await batch_process("/data/input", "/data/output")
+print(f"Processed {result['processed']} files")
+```
+
+## SimpleSkillsManager
+
+For programmatic skill management, use the `SimpleSkillsManager` from agent-skills:
+
+```python
+from agent_skills import SimpleSkillsManager, SimpleSkill
+
+# Create a skills manager
+manager = SimpleSkillsManager("./skills")
+
+# Save a skill
+skill = SimpleSkill(
+    name="backup_to_cloud",
+    description="Backup files to cloud storage",
+    code='''
+async def backup_to_cloud(source: str, bucket: str) -> dict:
+    files = await bash__ls({"path": source})
+    uploaded = 0
+    for f in files:
+        await cloud__upload({"file": f, "bucket": bucket})
+        uploaded += 1
+    return {"uploaded": uploaded}
+''',
+    tools_used=["bash__ls", "cloud__upload"],
+    tags=["backup", "cloud"],
+)
+manager.save_skill(skill)
+
+# Load a skill later
+loaded = manager.load_skill("backup_to_cloud")
+print(loaded.description)  # "Backup files to cloud storage"
+print(loaded.code)
+```
+
+### SimpleSkill Attributes
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `name` | `str` | Unique skill identifier |
+| `description` | `str` | Human-readable description |
+| `code` | `str` | Python code implementing the skill |
+| `tools_used` | `list[str]` | List of tool names used |
+| `tags` | `list[str]` | Optional categorization tags |
+| `parameters` | `dict` | Optional JSON schema for parameters |
+| `created_at` | `float` | Unix timestamp when created |
+| `updated_at` | `float` | Unix timestamp when last updated |
+
+## SkillDirectory Pattern
+
+For file-based skill organization with automatic discovery:
+
+```python
+from agent_skills import SkillDirectory, setup_skills_directory
+
+# Initialize skills directory
+skills = setup_skills_directory("./workspace/skills")
+
+# List available skills
+for skill in skills.list():
+    print(f"{skill.name}: {skill.description}")
+
+# Get a specific skill
+skill = skills.get("batch_process")
+
+# Search for relevant skills
+matches = skills.search("data processing")
+
+# Create a new skill programmatically
+skills.create(
+    name="my_skill",
+    code='async def my_skill(x: str) -> str: return x.upper()',
+    description="Transform text to uppercase",
+)
+```
+
+## Composing Skills
+
+Skills can import and use other skills to build higher-level operations:
+
+```python
+# skills/analyze_and_report.py
+"""Analyze data and generate a report."""
+
+async def analyze_and_report(data_dir: str) -> dict:
+    from skills.batch_process import batch_process
+    from skills.generate_report import generate_report
+    
+    # First process the files
+    process_result = await batch_process(data_dir, f"{data_dir}/processed")
+    
+    # Then generate a report
+    report = await generate_report(f"{data_dir}/processed")
+    
+    return {"processed": process_result["processed"], "report": report}
+```
+
+## MCP Server Integration
+
+When running Agent Codemode as an MCP server, skills are exposed through dedicated tools:
+
+- **`save_skill`**: Save a new skill or update an existing one
+- **`run_skill`**: Execute a saved skill by name
+
+```python
+from agent_codemode import codemode_server, configure_server
+from agent_codemode import CodeModeConfig
+
+config = CodeModeConfig(
+    skills_path="./skills",
+    # ... other config
+)
+
+configure_server(config=config)
+codemode_server.run()
+```
+
+## Pydantic AI Integration
+
+For Pydantic AI agents, use the `DatalayerSkillsToolset`:
+
+```python
+from pydantic_ai import Agent
+from agent_skills import DatalayerSkillsToolset, SandboxExecutor
+from code_sandboxes import LocalEvalSandbox
+
+# Create toolset with sandbox execution
+sandbox = LocalEvalSandbox()
+toolset = DatalayerSkillsToolset(
+    directories=["./skills"],
+    executor=SandboxExecutor(sandbox),
+)
+
+# Use with pydantic-ai agent
+agent = Agent(
+    model='openai:gpt-4o',
+    toolsets=[toolset],
+)
+
+# Agent gets: list_skills, load_skill, read_skill_resource, run_skill_script
+```
+
+## Helper Utilities
+
+The agent-skills package provides helper utilities for skill composition:
+
+```python
+from agent_skills import wait_for, retry, run_with_timeout, parallel, RateLimiter
+
+# Retry an operation on failure
+result = await retry(my_async_function, max_attempts=3, delay=1.0)
+
+# Run with timeout
+result = await run_with_timeout(slow_operation(), timeout=30.0)
+
+# Run multiple operations in parallel
+results = await parallel([task1(), task2(), task3()])
+
+# Rate limiting
+limiter = RateLimiter(max_calls=10, period=60)  # 10 calls per minute
+async with limiter:
+    await api_call()
+```
+
+## Best Practices
+
+1. **Clear naming**: Use descriptive names that indicate what the skill does
+2. **Documentation**: Include docstrings with Args, Returns, and Examples
+3. **Single responsibility**: Each skill should do one thing well
+4. **Error handling**: Include try/except for robust execution
+5. **Composability**: Design skills to be easily combined with others
+6. **Testing**: Test skills independently before composing them
+
+## See Also
+
+- [Agent Skills Documentation](https://github.com/datalayer/agent-skills)
+- [Code Execution](../execution/index.mdx)
+- [Tool Discovery](../discovery/index.mdx)

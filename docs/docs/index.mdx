@@ -1,0 +1,206 @@
+---
+sidebar_position: 1
+title: Agent Codemode
+slug: /
+---
+
+import DocCardList from '@theme/DocCardList';
+import { useDocsSidebar } from '@docusaurus/plugin-content-docs/client';
+
+# Agent Codemode
+
+**Agent Codemode** enables a "Code Mode" pattern for AI agents where they write Python code that orchestrates multiple MCP tool calls, rather than making individual tool calls through LLM inference.
+
+Agent Codemode uses [code-sandboxes](https://code-sandboxes.datalayer.tech) for safe, isolated code execution.
+
+## Package Scope
+
+Agent Codemode is the **tool composition layer** in the Datalayer AI stack:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     agent-runtimes                          │
+│            (Agent hosting, protocols, UI)                   │
+├──────────────────────────┬──────────────────────────────────┤
+│      agent-codemode        │         agent-skills             │  ◀── You are here
+│  (discovery, codegen)    │     (skills management)          │
+├──────────────────────────┴──────────────────────────────────┤
+│                    code-sandboxes                           │
+│          (Safe code execution environment)                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Responsibilities:**
+- ✅ Connect to MCP servers and discover tools (ToolRegistry)
+- ✅ Generate typed Python bindings from MCP tool schemas (CodeGenerator)
+- ✅ Provide progressive tool discovery (search_tools, get_tool_details)
+- ✅ Execute Python code that composes tools (CodeModeExecutor)
+- ✅ Route tool calls to appropriate MCP servers
+
+**Not Responsible For:**
+- ❌ Raw code execution isolation (→ code-sandboxes)
+- ❌ Skill lifecycle management (→ agent-skills)
+- ❌ Agent protocols or UI components (→ agent-runtimes)
+
+## Why Code Mode?
+
+Traditional AI agents call tools one at a time, with each call requiring an LLM inference round-trip. This approach has limitations:
+
+- **Inefficient**: Multiple LLM calls for multi-step operations
+- **Error-prone**: No robust error handling between tool calls
+- **Limited**: Cannot leverage programming constructs like loops or conditionals
+- **Not reusable**: Patterns must be rediscovered each time
+
+Agent Codemode solves these by letting agents **write code** that composes tools:
+
+```python
+# Instead of many individual tool calls...
+# The agent writes code that orchestrates tools programmatically
+
+from generated.servers.filesystem import read_file, write_file
+import asyncio
+
+# Read multiple files in parallel
+files = ["config.json", "data.csv", "readme.md"]
+contents = await asyncio.gather(*[
+    read_file({"path": f"/data/{f}"}) for f in files
+])
+
+# Process with try/except for robustness
+for i, content in enumerate(contents):
+    try:
+        processed = content.upper()
+        await write_file({"path": f"/output/{files[i]}", "content": processed})
+    except Exception as e:
+        print(f"Failed to process {files[i]}: {e}")
+```
+
+## Before vs After (Codemode pattern)
+
+Codemode follows the same “wrap tools, then let the model write code” pattern popularized by Cloudflare’s Code Mode. The flow looks like this:
+
+**Before (traditional tool calls):** the model calls each tool directly.
+
+**After (Codemode):** you give the model meta-tools that let it discover tools and execute Python code that composes them.
+
+Example (Agent Codemode, Python):
+
+```python
+from agent_codemode import ToolRegistry, CodeModeExecutor, MCPServerConfig
+
+# Configure the registry with MCP servers
+registry = ToolRegistry()
+registry.add_server(MCPServerConfig(
+    name="filesystem",
+    transport="stdio",
+    command="npx",
+    args=["-y", "@anthropic/mcp-server-filesystem", "/tmp"],
+))
+await registry.discover_all()
+
+# Execute code that composes tools
+executor = CodeModeExecutor(registry)
+await executor.setup()
+
+result = await executor.execute("""
+    from generated.servers.filesystem import read_file, write_file
+    content = await read_file({"path": "/tmp/input.txt"})
+    await write_file({"path": "/tmp/output.txt", "content": content.upper()})
+""")
+```
+
+**In Agent Codemode**, the same idea is exposed as **meta-tools** (`list_tool_names`, `search_tools`, `execute_code`, etc.). When Codemode is enabled in agent-runtimes, selected MCP servers are converted into Codemode tool bindings instead of being exposed directly as individual tools.
+
+## Key Features
+
+### 🔍 Progressive Tool Discovery
+
+Large tool catalogs (100+ tools) are overwhelming for LLMs. The **Tool Search Tool** enables progressive discovery:
+
+```python
+# Find relevant tools without loading all definitions
+result = await search_tools("file operations", limit=10)
+for tool in result["tools"]:
+    print(f"{tool['name']}: {tool['description']}")
+```
+
+### ⚡ Code-Based Composition
+
+Execute Python code with auto-generated MCP tool bindings:
+
+```python
+from generated.servers.bash import run_command
+from generated.servers.filesystem import write_file
+
+# Execute shell command and save output
+result = await run_command({"command": "ls -la /tmp"})
+await write_file({"path": "/reports/listing.txt", "content": result["output"]})
+```
+
+### 🔗 Integration with agent-skills
+
+While agent-codemode handles tool discovery and composition, **agent-skills** manages reusable skill patterns:
+
+```python
+# agent-codemode: Discovers and executes tools
+from agent_codemode import CodemodeToolset
+
+# agent-skills: Manages reusable skills
+from agent_skills import DatalayerSkillsToolset
+
+# Use both together
+agent = Agent(
+    model='openai:gpt-4o',
+    toolsets=[CodemodeToolset(registry), DatalayerSkillsToolset(skills_dir)],
+)
+```
+
+### 🔌 Multiple Integration Modes
+
+- **MCP Server**: Expose codemode as an MCP server for any MCP client
+- **Pydantic AI Toolset**: Direct integration with Pydantic AI agents
+- **Standalone**: Use the executor and registry directly in code
+
+## Quick Start
+
+```bash
+pip install agent-codemode
+```
+
+```python
+from agent_codemode import ToolRegistry, CodeModeExecutor, MCPServerConfig
+
+# Set up registry with MCP servers
+registry = ToolRegistry()
+registry.add_server(MCPServerConfig(
+    name="filesystem",
+    transport="stdio",
+    command="npx",
+    args=["-y", "@anthropic/mcp-server-filesystem", "/tmp"]
+))
+await registry.discover_all()
+
+# Execute code that composes tools
+executor = CodeModeExecutor(registry)
+await executor.setup()
+
+result = await executor.execute("""
+    from generated.servers.filesystem import read_file, write_file
+    
+    content = await read_file({"path": "/tmp/input.txt"})
+    await write_file({"path": "/tmp/output.txt", "content": content.upper()})
+""")
+```
+
+## Documentation
+
+<DocCardList />
+
+## Inspiration
+
+Agent Codemode is inspired by:
+- [Cloudflare Code Mode](https://blog.cloudflare.com/code-mode) - The better way to use MCP
+- [Cloudflare's open-source Code Mode agent](https://github.com/cloudflare/agents/blob/main/docs/codemode.md)
+- [Example: Building a Code Mode Agent with MCP](https://www.anthropic.com/engineering/example-building-a-code-mode-agent-with-mcp) - Step-by-step guide
+- [Anthropic Code execution with MCP](https://www.anthropic.com/engineering/code-execution-with-mcp) - Building more efficient agents
+- [Anthropic Introducing advanced tool use](https://www.anthropic.com/engineering/advanced-tool-use) - Claude Developer Platform

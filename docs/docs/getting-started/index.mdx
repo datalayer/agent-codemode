@@ -1,0 +1,158 @@
+---
+title: Getting Started
+sidebar_position: 1
+---
+
+# Getting Started
+
+This guide will help you get Agent Codemode up and running quickly.
+
+## Installation
+
+Install Agent Codemode using pip:
+
+```bash
+pip install agent-codemode
+```
+
+For development or to get the latest features:
+
+```bash
+pip install git+https://github.com/datalayer/agent-codemode.git
+```
+
+## Prerequisites
+
+- Python 3.10 or later
+- MCP servers you want to connect to (e.g., filesystem, bash, web)
+
+## Basic Setup
+
+### 1. Create a Tool Registry
+
+The `ToolRegistry` manages connections to MCP servers and tracks available tools:
+
+```python
+from agent_codemode import ToolRegistry, MCPServerConfig
+
+# Create a registry
+registry = ToolRegistry()
+
+# Add an MCP server (stdio transport)
+registry.add_server(MCPServerConfig(
+    name="filesystem",
+    transport="stdio",
+    command="npx",
+    args=["-y", "@anthropic/mcp-server-filesystem", "/tmp"]
+))
+
+# Add another server (HTTP transport)
+registry.add_server(MCPServerConfig(
+    name="web",
+    transport="http",
+    url="http://localhost:8001"
+))
+
+# Discover tools from all servers
+await registry.discover_all()
+
+# List available tools
+for tool in registry.list_tools():
+    print(f"{tool.name}: {tool.description}")
+```
+
+### 2. Set Up the Executor
+
+The `CodeModeExecutor` runs Python code that uses MCP tools:
+
+```python
+from agent_codemode import CodeModeExecutor
+
+# Create executor with the registry
+executor = CodeModeExecutor(registry)
+
+# Set up (generates tool bindings)
+await executor.setup()
+```
+
+### 3. Execute Code
+
+Now you can run code that composes MCP tools:
+
+```python
+result = await executor.execute("""
+    from generated.servers.filesystem import read_file, write_file
+    
+    # Read a file
+    content = await read_file({"path": "/tmp/input.txt"})
+    
+    # Process it
+    processed = content.upper()
+    
+    # Write the result
+    await write_file({"path": "/tmp/output.txt", "content": processed})
+    
+    print(f"Processed {len(content)} characters")
+""")
+
+print(result.output)  # "Processed 42 characters"
+print(result.success) # True
+```
+
+## Complete Example
+
+Here's a complete example putting it all together:
+
+```python
+import asyncio
+from agent_codemode import ToolRegistry, CodeModeExecutor, MCPServerConfig
+
+async def main():
+    # Set up registry
+    registry = ToolRegistry()
+    registry.add_server(MCPServerConfig(
+        name="filesystem",
+        transport="stdio",
+        command="npx",
+        args=["-y", "@anthropic/mcp-server-filesystem", "/workspace"]
+    ))
+    await registry.discover_all()
+    
+    # Set up executor
+    executor = CodeModeExecutor(registry)
+    await executor.setup()
+    
+    # Execute code
+    result = await executor.execute("""
+        from generated.servers.filesystem import list_directory, read_file
+        import asyncio
+        
+        # List files
+        entries = await list_directory({"path": "/"})
+        print(f"Found {len(entries['entries'])} files")
+        
+        # Read all text files in parallel
+        txt_files = [e for e in entries['entries'] if e.endswith('.txt')]
+        contents = await asyncio.gather(*[
+            read_file({"path": f"/{f}"}) for f in txt_files
+        ])
+        
+        total_chars = sum(len(c) for c in contents)
+        print(f"Total characters: {total_chars}")
+    """)
+    
+    if result.success:
+        print("Execution successful!")
+        print(result.output)
+    else:
+        print(f"Execution failed: {result.error}")
+
+asyncio.run(main())
+```
+
+## Next Steps
+
+- Learn about [Tool Discovery](/discovery) for finding and using tools
+- Explore [Code Execution](/execution) for advanced execution patterns
+- Create reusable [Skills](/concept#skills) for common tasks
+- Integrate with [Pydantic AI](/integrations#pydantic-ai-integration) for AI agents
