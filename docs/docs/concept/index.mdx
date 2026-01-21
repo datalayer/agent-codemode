@@ -1,11 +1,24 @@
 ---
 title: Concepts
-sidebar_position: 2
 ---
 
 # Concepts
 
-This page explains the core concepts behind Code Mode and why it's a powerful paradigm for AI agents.
+This page explains the core concepts behind Agent Codemode and why it's a powerful paradigm for AI agents.
+
+## What Agent Codemode Does
+
+Agent Codemode generates **programmatic tools** from two sources:
+
+| Source | Description | Example |
+|--------|-------------|---------|
+| **MCP Servers** | Connect to any MCP server and generate typed Python bindings | `from generated.servers.filesystem import read_file` |
+| **Skills** | Reusable code patterns that compose multiple tools | `from skills.batch_process import batch_process` |
+
+These programmatic tools can then be:
+
+1. **Used directly by an agent** - Import and call from agent code
+2. **Exposed as an MCP Server** - Serve via MCP protocol for any client
 
 ## The Traditional Approach
 

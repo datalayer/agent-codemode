@@ -1,0 +1,304 @@
+---
+title: MCP Tools
+---
+
+# MCP Tools
+
+**MCP Servers** are one of the two sources Agent Codemode uses to generate programmatic tools (the other being [Skills](../skills/index.mdx)).
+
+When you connect an MCP Server to Agent Codemode, it automatically generates typed Python bindings that you can import and call directly in your code.
+
+## How It Works
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────────────────┐
+│   MCP Server    │ ──▶ │  Tool Registry  │ ──▶ │  Generated Python Bindings  │
+│  (filesystem,   │     │   (discovers    │     │   from generated.servers.X  │
+│   web, db...)   │     │    tools)       │     │   import tool_a, tool_b     │
+└─────────────────┘     └─────────────────┘     └─────────────────────────────┘
+```
+
+1. **Connect** - Add MCP servers to the Tool Registry
+2. **Discover** - Agent Codemode discovers all available tools via MCP protocol
+3. **Generate** - Typed Python bindings are generated for each tool
+4. **Use** - Import and call tools like any Python function
+
+## Connecting MCP Servers
+
+### Stdio Transport (Local Process)
+
+For MCP servers that run as subprocesses:
+
+```python
+from agent_codemode import ToolRegistry, MCPServerConfig
+
+registry = ToolRegistry()
+
+# Connect to the Anthropic filesystem MCP server
+registry.add_server(MCPServerConfig(
+    name="filesystem",
+    transport="stdio",
+    command="npx",
+    args=["-y", "@anthropic/mcp-server-filesystem", "/workspace"]
+))
+
+# Connect to a Python-based MCP server
+registry.add_server(MCPServerConfig(
+    name="database",
+    transport="stdio",
+    command="python",
+    args=["-m", "my_mcp_server"]
+))
+```
+
+### HTTP Transport (Network)
+
+For MCP servers running as HTTP services:
+
+```python
+# Simple HTTP server
+registry.add_server(MCPServerConfig(
+    name="api",
+    transport="http",
+    url="http://localhost:8001"
+))
+
+# With authentication
+registry.add_server(MCPServerConfig(
+    name="secure_api",
+    transport="http",
+    url="https://api.example.com/mcp",
+    headers={"Authorization": "Bearer your-token"}
+))
+```
+
+### SSE Transport (Server-Sent Events)
+
+For MCP servers using SSE:
+
+```python
+registry.add_server(MCPServerConfig(
+    name="streaming",
+    transport="sse",
+    url="http://localhost:8002/sse"
+))
+```
+
+## Discovering Tools
+
+After adding servers, discover their tools:
+
+```python
+# Discover tools from all connected servers
+tools_by_server = await registry.discover_all()
+
+for server_name, tools in tools_by_server.items():
+    print(f"{server_name}: {len(tools)} tools")
+    for tool in tools[:3]:  # Show first 3
+        print(f"  - {tool.name}: {tool.description}")
+```
+
+## Generated Bindings
+
+Agent Codemode generates Python bindings in the `generated/servers/` directory:
+
+```python
+# Generated: generated/servers/filesystem.py
+async def read_file(arguments: dict) -> str:
+    """Read the complete contents of a file.
+    
+    Args:
+        path: Path to the file to read
+    
+    Returns:
+        File contents as string
+    """
+    return await _call_tool("filesystem", "read_file", arguments)
+
+async def write_file(arguments: dict) -> dict:
+    """Write content to a file.
+    
+    Args:
+        path: Path to the file to write
+        content: Content to write
+    
+    Returns:
+        Success status
+    """
+    return await _call_tool("filesystem", "write_file", arguments)
+```
+
+## Using Generated Tools
+
+Import and use the generated bindings in your code:
+
+```python
+from generated.servers.filesystem import read_file, write_file, list_directory
+from generated.servers.web import fetch_url
+
+# Read a file
+content = await read_file({"path": "/data/config.json"})
+
+# Write to a file
+await write_file({
+    "path": "/output/result.txt",
+    "content": "Processing complete!"
+})
+
+# List directory contents
+entries = await list_directory({"path": "/data"})
+for entry in entries["entries"]:
+    print(entry)
+```
+
+## Tool Naming Convention
+
+Generated tools follow the pattern `{server_name}__{tool_name}`:
+
+| MCP Server | MCP Tool | Generated Import |
+|------------|----------|-----------------|
+| `filesystem` | `read_file` | `from generated.servers.filesystem import read_file` |
+| `web` | `fetch` | `from generated.servers.web import fetch` |
+| `database` | `query` | `from generated.servers.database import query` |
+
+## Tool Metadata
+
+Each generated tool includes rich metadata for better LLM understanding:
+
+```python
+# Get detailed tool information
+tool = registry.get_tool_details("filesystem__read_file")
+
+print(f"Name: {tool.name}")
+print(f"Description: {tool.description}")
+print(f"Input Schema: {tool.input_schema}")
+print(f"Output Schema: {tool.output_schema}")
+print(f"Examples: {tool.input_examples}")
+```
+
+### Input Examples
+
+Tools can include input examples for better LLM accuracy:
+
+```python
+{
+    "name": "filesystem__read_file",
+    "description": "Read file contents",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "path": {"type": "string", "description": "File path"}
+        },
+        "required": ["path"]
+    },
+    "input_examples": [
+        {"path": "/home/user/document.txt"},
+        {"path": "/var/log/app.log"}
+    ]
+}
+```
+
+### Output Schema
+
+Tools can declare their output structure:
+
+```python
+{
+    "name": "filesystem__list_directory",
+    "output_schema": {
+        "type": "object",
+        "properties": {
+            "entries": {
+                "type": "array",
+                "items": {"type": "string"}
+            }
+        }
+    }
+}
+```
+
+## Deferred Loading
+
+For large tool catalogs, use deferred loading to avoid overwhelming the LLM:
+
+```python
+# Mark tools as deferred (excluded from default listings)
+registry.add_server(MCPServerConfig(
+    name="large_catalog",
+    transport="http",
+    url="http://localhost:8003",
+    defer_loading=True  # Tools won't appear in default list
+))
+
+# List tools (excludes deferred by default)
+tools = registry.list_tools()
+
+# Include deferred tools when needed
+all_tools = registry.list_tools(include_deferred=True)
+
+# Search includes deferred tools by default
+results = await registry.search_tools("file operations")
+```
+
+## Popular MCP Servers
+
+Agent Codemode works with any MCP-compliant server. Here are some popular ones:
+
+| Server | Description | Install |
+|--------|-------------|---------|
+| `@anthropic/mcp-server-filesystem` | File system operations | `npx -y @anthropic/mcp-server-filesystem /path` |
+| `@anthropic/mcp-server-github` | GitHub API | `npx -y @anthropic/mcp-server-github` |
+| `@anthropic/mcp-server-slack` | Slack integration | `npx -y @anthropic/mcp-server-slack` |
+| `@anthropic/mcp-server-memory` | Key-value storage | `npx -y @anthropic/mcp-server-memory` |
+
+## Example: Multi-Server Setup
+
+```python
+from agent_codemode import ToolRegistry, MCPServerConfig, CodeModeExecutor
+
+# Set up registry with multiple MCP servers
+registry = ToolRegistry()
+
+registry.add_server(MCPServerConfig(
+    name="filesystem",
+    transport="stdio",
+    command="npx",
+    args=["-y", "@anthropic/mcp-server-filesystem", "/workspace"]
+))
+
+registry.add_server(MCPServerConfig(
+    name="github",
+    transport="stdio",
+    command="npx",
+    args=["-y", "@anthropic/mcp-server-github"],
+    env={"GITHUB_TOKEN": "your-token"}
+))
+
+# Discover all tools
+await registry.discover_all()
+
+# Execute code that uses tools from multiple servers
+async with CodeModeExecutor(registry) as executor:
+    result = await executor.execute("""
+        from generated.servers.filesystem import read_file, write_file
+        from generated.servers.github import create_issue
+        
+        # Read local file
+        content = await read_file({"path": "/workspace/bug-report.txt"})
+        
+        # Create GitHub issue with the content
+        issue = await create_issue({
+            "repo": "myorg/myrepo",
+            "title": "Bug Report",
+            "body": content
+        })
+        
+        print(f"Created issue: {issue['url']}")
+    """)
+```
+
+## See Also
+
+- [Skills](../skills/index.mdx) - The other source for programmatic tools
+- [Tool Discovery](../discovery/index.mdx) - Progressive tool discovery
+- [Programmatic Tools](../programmatic-tools/index.mdx) - Executing generated tools

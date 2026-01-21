@@ -1,15 +1,32 @@
 ---
 title: Skills
-sidebar_position: 5
 ---
 
 # Skills
 
-Skills are reusable code patterns that compose MCP tools to accomplish specific tasks. Agent Codemode integrates with the [agent-skills](https://github.com/datalayer/agent-skills) package to provide comprehensive skill management.
+**Skills** are one of the two sources Agent Codemode uses to generate programmatic tools (the other being [MCP Tools](../mcp-tools/index.mdx)).
+
+Skills are reusable code patterns that compose MCP tools to accomplish specific tasks. They allow agents to build up a toolbox of higher-level operations. Agent Codemode integrates with the [agent-skills](https://github.com/datalayer/agent-skills) package for comprehensive skill management.
+
+## How It Works
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────────────────┐
+│  Skill Files    │ ──▶ │ Skills Manager  │ ──▶ │  Callable Python Functions  │
+│  (skills/*.py)  │     │   (discovers    │     │   from skills.batch_process │
+│   or saved via  │     │   and loads)    │     │   import batch_process      │
+│     manager     │     │                 │     │                             │
+└─────────────────┘     └─────────────────┘     └─────────────────────────────┘
+```
+
+1. **Create** - Write skill files in `skills/` directory or save via `SimpleSkillsManager`
+2. **Discover** - Agent Codemode discovers all available skills
+3. **Load** - Skills are loaded as callable Python functions
+4. **Use** - Import and call skills like any Python module
 
 ## Overview
 
-Skills allow AI agents to:
+Skills enable AI agents to:
 
 - **Save useful patterns**: Store code that works well for reuse
 - **Build a toolbox**: Accumulate capabilities over time
@@ -235,5 +252,5 @@ async with limiter:
 ## See Also
 
 - [Agent Skills Documentation](https://github.com/datalayer/agent-skills)
-- [Code Execution](../execution/index.mdx)
+- [Programmatic Tools](../programmatic-tools/index.mdx)
 - [Tool Discovery](../discovery/index.mdx)

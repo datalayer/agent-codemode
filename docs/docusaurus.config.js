@@ -50,15 +50,9 @@ module.exports = {
         },
         {
           type: 'doc',
-          docId: 'discovery/index',
+          docId: 'mcp-tools/index',
           position: 'left',
-          label: 'Tool Discovery',
-        },
-        {
-          type: 'doc',
-          docId: 'execution/index',
-          position: 'left',
-          label: 'Code Execution',
+          label: 'MCP Tools',
         },
         {
           type: 'doc',
@@ -68,9 +62,27 @@ module.exports = {
         },
         {
           type: 'doc',
+          docId: 'programmatic-tools/index',
+          position: 'left',
+          label: 'Programmatic Tools',
+        },
+        {
+          type: 'doc',
+          docId: 'discovery/index',
+          position: 'left',
+          label: 'Tool Discovery',
+        },
+        {
+          type: 'doc',
           docId: 'integrations/index',
           position: 'left',
           label: 'Integrations',
+        },
+        {
+          type: 'doc',
+          docId: 'mcp-server/index',
+          position: 'left',
+          label: 'MCP Server',
         },
         {
           type: 'doc',

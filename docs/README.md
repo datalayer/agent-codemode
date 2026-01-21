@@ -4,7 +4,7 @@
 
 # Agent Codemode Docs
 
-> Source code for the [Agent Codemode Documentation](https://agent-codemode.datalayer.tech), built with [Docusaurus](https://docusaurus.io).
+> Documentation for [Agent Codemode](https://agent-codemode.datalayer.tech) - Generate programmatic tools from MCP Servers and Skills. Built with [Docusaurus](https://docusaurus.io).
 
 ```bash
 # Install the dependencies.

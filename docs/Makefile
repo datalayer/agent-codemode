@@ -60,6 +60,6 @@ deploy: build ## deploy
 		s3://datalayer-agent-codemode/ \
 		--recursive && \
 	  aws cloudfront create-invalidation \
-		--distribution-id EX7FZER5BMQH4 \
+		--distribution-id E364XTFIUUMV0I \
 		--paths "/*" )
 	echo open ✨  https://agent-codemode.datalayer.tech

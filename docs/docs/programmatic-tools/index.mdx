@@ -1,15 +1,14 @@
 ---
-title: Code Execution
-sidebar_position: 1
+title: Programmatic Tools
 ---
 
-# Code Execution
+# Programmatic Tools
 
-The `CodeModeExecutor` is the heart of Agent Codemode, running Python code that composes MCP tools.
+After generating programmatic tools from [MCP Servers](../mcp-tools/index.mdx) and [Skills](../skills/index.mdx), you can execute them using the `CodeModeExecutor`.
 
 ## Overview
 
-Instead of making individual tool calls through LLM inference, agents write Python code that:
+The `CodeModeExecutor` runs Python code that composes your generated tools. Instead of making individual tool calls through LLM inference, agents write Python code that:
 
 **Important Architecture Note:** The tools you call in your code (e.g., `from generated.servers.example_mcp import tool`) are **actual MCP tools** and communicate through the **MCP protocol**. The `CodemodeToolset` itself is a Pydantic AI toolset (not an MCP server), but it enables you to write Python code that orchestrates MCP tool calls. This is by design - MCP servers remain MCP servers, and codemode provides a code-first interface for composing them programmatically.
 

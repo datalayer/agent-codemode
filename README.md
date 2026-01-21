@@ -8,20 +8,32 @@
 
 [![Become a Sponsor](https://img.shields.io/static/v1?label=Become%20a%20Sponsor&message=%E2%9D%A4&logo=GitHub&style=flat&color=1ABC9C)](https://github.com/sponsors/datalayer)
 
-# 🔧 Agent Codemode
+# 🤖 Agent Codemode
 
 [![PyPI - Version](https://img.shields.io/pypi/v/agent-codemode)](https://pypi.org/project/agent-codemode)
 
-**Code Mode for MCP Tools**: Programmatically call and compose MCP tools through code execution instead of individual LLM tool calls.
+**Generate programmatic tools from MCP Servers and Skills.**
 
-## Overview
+## What is Agent Codemode?
 
-Agent Codemode enables a "Code Mode" pattern where AI agents write Python code that orchestrates multiple MCP tool calls, rather than making individual tool calls through LLM inference. This approach is:
+Agent Codemode generates **programmatic tools** from two sources:
 
-- **More efficient**: Reduce LLM calls for multi-step operations
+1. **MCP Servers** - Connect to any MCP server and generate typed Python bindings for its tools
+2. **Skills** - Reusable code patterns that compose multiple tools into higher-level operations
+
+These programmatic tools can be:
+
+- **Used directly by an agent** - Import generated bindings and call tools from your agent's code
+- **Exposed as an MCP Server** - Serve the generated tools via MCP protocol for any MCP-compatible client
+
+## Why Agent Codemode?
+
+Traditional AI agents call tools one at a time through LLM inference. Agent Codemode enables a "Code Mode" pattern where agents write Python code that orchestrates multiple tool calls:
+
+- **More efficient**: Single code generation instead of many LLM tool-call round-trips
 - **More reliable**: Use try/except for robust error handling
 - **More powerful**: Parallel execution with asyncio, loops, conditionals
-- **More composable**: Save reusable patterns as skills
+- **More composable**: Save and reuse patterns as Skills
 
 ## Configuration Highlights
 
@@ -261,15 +273,15 @@ agent = Agent(
 )
 ```
 
-### MCP Server
+### MCP Server Mode
 
-Expose Code Mode capabilities as an MCP server:
+Expose the programmatic tools as an MCP server for any MCP-compatible client:
 
 ```python
 from agent_codemode import codemode_server, configure_server
 from agent_codemode import ToolRegistry, MCPServerConfig, CodeModeConfig
 
-# Create and configure registry
+# Create and configure registry with MCP servers to compose
 registry = ToolRegistry()
 registry.add_server(MCPServerConfig(
     name="filesystem",
@@ -288,24 +300,26 @@ configure_server(config=config, registry=registry)
 codemode_server.run()
 ```
 
-Or start with default configuration:
+Or start with command line:
 
-```python
-from agent_codemode import codemode_server, configure_server
-
-configure_server()
-codemode_server.run()
+```bash
+python -m agent_codemode.server --workspace ./workspace
 ```
 
-Tools exposed:
-- `search_tools` - Progressive tool discovery
-- `list_servers` - List connected MCP servers
-- `get_tool_details` - Get full tool schema
-- `execute_code` - Run code that composes tools
-- `call_tool` - Direct tool invocation (when `allow_direct_tool_calls=True`)
-- `save_skill` / `run_skill` - Skill management
+**Tools exposed by the MCP server:**
 
-## Key Concepts
+| Tool | Description |
+|------|-------------|
+| `search_tools` | Progressive tool discovery |
+| `list_servers` | List connected MCP servers |
+| `get_tool_details` | Get full tool schema |
+| `execute_code` | Run code that composes tools |
+| `call_tool` | Direct tool invocation |
+| `save_skill` / `run_skill` | Skill management |
+| `list_skills` / `delete_skill` | Skill management |
+| `add_mcp_server` | Dynamically add servers |
+
+### Pydantic AI Integration
 
 ### Tool Discovery
 
@@ -327,7 +341,7 @@ When running in a sandbox, state can persist between `execute_code` calls within
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         Agent Codemode                                │
+│                         Agent Codemode                              │
 ├─────────────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐  ┌────────────────┐  ┌───────────────────────┐ │
 │  │  Tool Registry  │  │ Code Executor  │  │   CodemodeToolset     │ │
@@ -337,16 +351,14 @@ When running in a sandbox, state can persist between `execute_code` calls within
 │  └─────────────────┘  └────────────────┘  └───────────────────────┘ │
 │                              │                                      │
 │              ┌───────────────┴───────────────┐                      │
-│              │        Generated Bindings      │                      │
-│              │   generated/servers/<name>.py  │                      │
+│              │        Generated Bindings     │                      │
+│              │  generated/servers/<name>.py  │                      │
 │              └───────────────────────────────┘                      │
-├─────────────────────────────────────────────────────────────────────┤
-│                         MCP Servers                                 │
-│    (filesystem, bash, web, etc. - connected via MCP protocol)       │
-├─────────────────────────────────────────────────────────────────────┤
-│                      Agent Skills (agent_skills)                    │
-│    (SimpleSkillsManager, SkillDirectory, DatalayerSkillsToolset)    │
-└─────────────────────────────────────────────────────────────────────┘
+├────────────────────────────────┬────────────────────────────────────┤
+│          MCP Servers           │      Agent Skills (agent_skills)   │
+│  (filesystem, bash, web, etc.  │    (SimpleSkillsManager,           │
+│   connected via MCP protocol)  │     SkillDirectory, skills/*.py)   │
+└────────────────────────────────┴────────────────────────────────────┘
 ```
 
 ## References
