@@ -8,7 +8,7 @@
 
 [![Become a Sponsor](https://img.shields.io/static/v1?label=Become%20a%20Sponsor&message=%E2%9D%A4&logo=GitHub&style=flat&color=1ABC9C)](https://github.com/sponsors/datalayer)
 
-# 🤖 Agent Codemode
+# 🤖 👨‍💻 Agent Codemode
 
 [![PyPI - Version](https://img.shields.io/pypi/v/agent-codemode)](https://pypi.org/project/agent-codemode)
 
@@ -145,7 +145,7 @@ print(execution.text)
 print(execution.success)
 ```
 
-### Skills (Reusable Compositions)
+### 🧰 Skills (Reusable Compositions)
 
 Skills are Python files that compose tools into reusable operations. This allows agents to evolve their own toolbox by saving useful code patterns. Skills functionality is provided by the [agent-skills](https://github.com/datalayer/agent-skills) package.
 
