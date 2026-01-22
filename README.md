@@ -14,10 +14,31 @@
 
 **Generate programmatic tools from MCP Servers and Skills.**
 
+## What is Agent Codemode?
+
+Agent Codemode generates **programmatic tools** from two sources:
+
+1. **MCP Servers** - Connect to any MCP server and generate typed Python bindings for its tools
+2. **Skills** - Reusable code patterns that compose multiple tools into higher-level operations
+
+These programmatic tools can be:
+
+- **Used directly by an agent** - Import generated bindings and call tools from your agent's code
+- **Exposed as an MCP Server** - Serve the generated tools via MCP protocol for any MCP-compatible client
+
 <p align="center">
   <img src="https://images.datalayer.io/products/mcp-codemode/demo-claude-list-tools.png" width="55%" alt="" />
   <img src="https://images.datalayer.io/products/mcp-codemode/demo-claude-execute-code.png" width="44%" alt="" />
 </p>
+
+## Why Agent Codemode?
+
+Traditional AI agents call tools one at a time through LLM inference. Agent Codemode enables a "Code Mode" pattern where agents write Python code that orchestrates multiple tool calls:
+
+- **More efficient**: Single code generation instead of many LLM tool-call round-trips
+- **More reliable**: Use try/except for robust error handling
+- **More powerful**: Parallel execution with asyncio, loops, conditionals
+- **More composable**: Save and reuse patterns as Skills
 
 Same task, same MCP server — Code Mode uses significantly fewer tokens by composing tools in code instead of multiple LLM round-trips.
 
@@ -36,27 +57,6 @@ Same task, same MCP server — Code Mode uses significantly fewer tokens by comp
   <em>Prompt: "Generate 2000 words of random text and write to a file"</em>
 </p>
 
-## What is Agent Codemode?
-
-Agent Codemode generates **programmatic tools** from two sources:
-
-1. **MCP Servers** - Connect to any MCP server and generate typed Python bindings for its tools
-2. **Skills** - Reusable code patterns that compose multiple tools into higher-level operations
-
-These programmatic tools can be:
-
-- **Used directly by an agent** - Import generated bindings and call tools from your agent's code
-- **Exposed as an MCP Server** - Serve the generated tools via MCP protocol for any MCP-compatible client
-
-## Why Agent Codemode?
-
-Traditional AI agents call tools one at a time through LLM inference. Agent Codemode enables a "Code Mode" pattern where agents write Python code that orchestrates multiple tool calls:
-
-- **More efficient**: Single code generation instead of many LLM tool-call round-trips
-- **More reliable**: Use try/except for robust error handling
-- **More powerful**: Parallel execution with asyncio, loops, conditionals
-- **More composable**: Save and reuse patterns as Skills
-
 ## Configuration Highlights
 
 | Option | Description |
@@ -70,9 +70,9 @@ Traditional AI agents call tools one at a time through LLM inference. Agent Code
 
 ### Tool Discovery Options
 
-- **`list_tool_names`**: Accepts `server`, `keywords`, `limit`, and `include_deferred` for fast filtering
-- **`search_tools`**: Natural language search with `include_deferred=True` by default
-- **`list_tools`**: Returns full `ToolDefinition` objects with `include_deferred=False` by default
+- **`list_tool_names`**: Fast listing with `server`, `keywords`, `limit` filters. `include_deferred=False` by default
+- **`search_tools`**: Natural language search with `query`, `server`, `limit`. `include_deferred=True` by default
+- **`get_tool_details`**: Get full schema and documentation for a specific tool
 
 ### Tool Metadata
 

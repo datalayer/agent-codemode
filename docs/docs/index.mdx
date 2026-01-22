@@ -11,28 +11,6 @@ import { useDocsSidebar } from '@docusaurus/plugin-content-docs/client';
 
 **Generate programmatic tools from MCP Servers and Skills.**
 
-<p align="center">
-  <img src="https://images.datalayer.io/products/mcp-codemode/demo-claude-list-tools.png" width="55%" alt="" />
-  <img src="https://images.datalayer.io/products/mcp-codemode/demo-claude-execute-code.png" width="44%" alt="" />
-</p>
-
-Same task, same MCP server — Code Mode uses significantly fewer tokens by composing tools in code instead of multiple LLM round-trips.
-
-<table align="center">
-  <tr>
-    <th>Without Code Mode</th>
-    <th>With Code Mode</th>
-  </tr>
-  <tr>
-    <td><img src="https://images.datalayer.io/products/mcp-codemode/tokens-non-codemode.png" width="100%" alt="Without Code Mode" /></td>
-    <td><img src="https://images.datalayer.io/products/mcp-codemode/tokens-codemode.png" width="100%" alt="With Code Mode" /></td>
-  </tr>
-</table>
-
-<p align="center">
-  <em>Prompt: "Generate 2000 words of random text and write to a file"</em>
-</p>
-
 ## What is Agent Codemode?
 
 **Agent Codemode** generates **programmatic tools** from two sources:
@@ -44,6 +22,11 @@ These programmatic tools can be:
 
 - **Used directly by an agent** - Import generated bindings and call tools from your agent's code
 - **Exposed as an MCP Server** - Serve the generated tools via MCP protocol for any MCP-compatible client
+
+<p align="center">
+  <img src="https://images.datalayer.io/products/mcp-codemode/demo-claude-list-tools.png" width="55%" alt="" />
+  <img src="https://images.datalayer.io/products/mcp-codemode/demo-claude-execute-code.png" width="44%" alt="" />
+</p>
 
 Agent Codemode uses [Code Sandboxes](https://code-sandboxes.datalayer.tech) for safe, isolated code execution.
 
@@ -108,6 +91,24 @@ for i, content in enumerate(contents):
     except Exception as e:
         print(f"Failed to process {files[i]}: {e}")
 ```
+
+Same task, same MCP server — Code Mode uses significantly fewer tokens by composing tools in code instead of multiple LLM round-trips.
+
+<table align="center">
+  <tr>
+    <th>Without Code Mode</th>
+    <th>With Code Mode</th>
+  </tr>
+  <tr>
+    <td><img src="https://images.datalayer.io/products/mcp-codemode/tokens-non-codemode.png" width="100%" alt="Without Code Mode" /></td>
+    <td><img src="https://images.datalayer.io/products/mcp-codemode/tokens-codemode.png" width="100%" alt="With Code Mode" /></td>
+  </tr>
+</table>
+
+<p align="center">
+  <em>Prompt: "Generate 2000 words of random text and write to a file"</em>
+</p>
+
 
 ## Before vs After (Codemode pattern)
 
