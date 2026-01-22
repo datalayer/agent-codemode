@@ -6,6 +6,7 @@ slug: /
 
 import DocCardList from '@theme/DocCardList';
 import { useDocsSidebar } from '@docusaurus/plugin-content-docs/client';
+import ModalImage from "react-modal-image";
 
 # 🤖 👨‍💻 Agent Codemode
 
@@ -23,12 +24,24 @@ These programmatic tools can be:
 - **Used directly by an agent** - Import generated bindings and call tools from your agent's code
 - **Exposed as an MCP Server** - Serve the generated tools via MCP protocol for any MCP-compatible client
 
-<p align="center">
-  <img src="https://images.datalayer.io/products/mcp-codemode/demo-claude-list-tools.png" width="55%" alt="" />
-  <img src="https://images.datalayer.io/products/mcp-codemode/demo-claude-execute-code.png" width="44%" alt="" />
-</p>
-
 Agent Codemode uses [Code Sandboxes](https://code-sandboxes.datalayer.tech) for safe, isolated code execution.
+
+<div style={{display: 'flex', justifyContent: 'center', gap: '1rem'}}>
+  <div style={{width: '55%'}}>
+    <ModalImage
+      small="https://images.datalayer.io/products/mcp-codemode/demo-claude-list-tools.png"
+      large="https://images.datalayer.io/products/mcp-codemode/demo-claude-list-tools.png"
+      alt="Demo: list tools"
+    />
+  </div>
+  <div style={{width: '44%'}}>
+    <ModalImage
+      small="https://images.datalayer.io/products/mcp-codemode/demo-claude-execute-code.png"
+      large="https://images.datalayer.io/products/mcp-codemode/demo-claude-execute-code.png"
+      alt="Demo: execute code"
+    />
+  </div>
+</div>
 
 ## Package Scope
 
