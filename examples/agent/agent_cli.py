@@ -76,34 +76,33 @@ def _build_system_prompt(
                     lines.append(f"- {name}")
         return " ".join(lines)
 
-    # For codemode: be very direct about using execute_code immediately
+    # For codemode: emphasize using the 4 core codemode tools
     lines = [
         "You are a helpful AI assistant with Agent Codemode.",
         "",
-        "CRITICAL: You have access to a PERSISTENT CODE EXECUTION ENVIRONMENT (code sandbox).",
-        "Variables, functions, and state PERSIST between execute_code calls.",
-        "If you create a variable 'x' in one execute_code call, it will still exist in the next call.",
+        "## Core Codemode Tools",
+        "Use these 4 tools to accomplish any task:",
         "",
-        "IMPORTANT: For any task, call execute_code ONCE with Python code that does the work.",
-        "Do NOT call list_tool_names, search_tools, or get_tool_details unless the user explicitly asks about available tools.",
+        "1. **search_tools** - Progressive tool discovery by natural language query",
+        "   Use this to find relevant tools before executing tasks.",
         "",
-        "When the user asks to 'read variable x' or 'print variable y', use execute_code to print that variable.",
-        "Example: If user says 'read variable x', call execute_code with code: 'print(x)'",
+        "2. **get_tool_details** - Get full tool schema and documentation",
+        "   Use this to understand tool parameters before calling them.",
         "",
-        "Available tools (import from generated.servers.example_mcp):",
-        "- generate_random_text(word_count=1000, seed=None) -> dict with 'text' and 'word_count'",
-        "- write_text_file(path, content) -> metadata dict",
-        "- read_text_file(path, include_content=True, max_chars=None) -> dict with content",
-        "- read_text_file_many(path, times=10, include_content=False, max_chars=None) -> stats dict",
+        "3. **execute_code** - Run Python code that composes multiple tools",
+        "   Use this for complex multi-step operations. Code runs in a PERSISTENT sandbox.",
+        "   Variables, functions, and state PERSIST between execute_code calls.",
+        "   Import tools using: `from generated.servers.<server_name> import <function_name>`",
+        "   NEVER use `import *` - always use explicit named imports.",
         "",
-        "Example for 'generate random text':",
-        "```",
-        "from generated.servers.example_mcp import generate_random_text",
-        "result = await generate_random_text({'word_count': 100})",
-        "print(result['text'])",
-        "```",
+        "4. **call_tool** - Direct single-tool invocation",
+        "   Use this for simple, single-tool operations.",
         "",
-        "Always use a single execute_code call. Do not discover tools first.",
+        "## Recommended Workflow",
+        "1. **Discover**: Use search_tools to find relevant tools",
+        "2. **Understand**: Use get_tool_details to check parameters",
+        "3. **Execute**: Use call_tool for simple ops OR execute_code for complex workflows",
+        "",
     ]
     return "\n".join(lines)
 
@@ -327,7 +326,7 @@ def create_agent(model: str, codemode: bool) -> tuple[Agent, object | None]:
         toolset = CodemodeToolset(
             registry=registry,
             config=config,
-            allow_discovery_tools=False,  # Disable discovery tools to reduce LLM calls
+            allow_discovery_tools=True,  # Enable discovery tools (search_tools, get_tool_details, list_tool_names, list_servers)
         )
         toolsets = [toolset]
     else:
@@ -371,14 +370,23 @@ def main() -> None:
     # Suppress verbose MCP server logs
     logging.getLogger("mcp.server").setLevel(logging.WARNING)
     
-    model = "anthropic:claude-sonnet-4-0"
-    codemode = False
-
-    for arg in sys.argv[1:]:
-        if arg == "--codemode":
-            codemode = True
-        else:
-            model = arg
+    import argparse
+    parser = argparse.ArgumentParser(description="MCP Agent CLI with Agent Codemode")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="anthropic:claude-sonnet-4-0",
+        help="Model to use (default: anthropic:claude-sonnet-4-0)"
+    )
+    parser.add_argument(
+        "--codemode",
+        action="store_true",
+        help="Enable Agent Codemode mode"
+    )
+    args = parser.parse_args()
+    
+    model = args.model
+    codemode = args.codemode
 
     print("\n" + "=" * 72)
     if codemode:
