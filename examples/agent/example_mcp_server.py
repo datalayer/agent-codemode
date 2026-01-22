@@ -8,13 +8,30 @@ Codemode agent CLI example.
 
 from __future__ import annotations
 
+import os
 import random
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TypedDict
 
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("example-mcp-server")
+
+# Base directory for file operations - defaults to /tmp if CWD is not writable
+_BASE_DIR: Path | None = None
+
+def _get_base_dir() -> Path:
+    """Get the base directory for file operations."""
+    global _BASE_DIR
+    if _BASE_DIR is None:
+        # Try CWD first, fall back to /tmp
+        cwd = Path.cwd()
+        if cwd == Path("/") or not os.access(cwd, os.W_OK):
+            _BASE_DIR = Path("/tmp/mcp_files")
+        else:
+            _BASE_DIR = cwd
+        _BASE_DIR.mkdir(parents=True, exist_ok=True)
+    return _BASE_DIR
 
 _WORDS = [
     "alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel",
@@ -30,12 +47,48 @@ _WORDS = [
 ]
 
 
+class GenerateRandomTextResult(TypedDict):
+    """Result from generate_random_text."""
+    text: str
+    word_count: int
+
+
+class WriteTextFileResult(TypedDict):
+    """Result from write_text_file."""
+    path: str
+    bytes: int
+    words: int
+
+
+class ReadTextFileResult(TypedDict, total=False):
+    """Result from read_text_file."""
+    path: str
+    bytes: int
+    words: int
+    content: str  # Optional field
+
+
+class ReadTextFileManyResult(TypedDict):
+    """Result from read_text_file_many."""
+    path: str
+    reads: int
+    last: ReadTextFileResult
+
+
 def _normalize_path(path: str) -> Path:
-    return Path(path).expanduser().resolve()
+    """Normalize a file path.
+    
+    Absolute paths are used as-is. Relative paths are resolved
+    relative to the base directory (CWD or /tmp/mcp_files if CWD is not writable).
+    """
+    p = Path(path).expanduser()
+    if p.is_absolute():
+        return p.resolve()
+    return (_get_base_dir() / p).resolve()
 
 
 @mcp.tool()
-def generate_random_text(word_count: int = 1000, seed: Optional[int] = None) -> dict:
+def generate_random_text(word_count: int = 1000, seed: Optional[int] = None) -> GenerateRandomTextResult:
     """Generate pseudo-random text.
 
     Args:
@@ -52,7 +105,7 @@ def generate_random_text(word_count: int = 1000, seed: Optional[int] = None) -> 
 
 
 @mcp.tool()
-def write_text_file(path: str, content: str) -> dict:
+def write_text_file(path: str, content: str) -> WriteTextFileResult:
     """Write text content to a file.
 
     Args:
@@ -77,7 +130,7 @@ def read_text_file(
     path: str,
     include_content: bool = True,
     max_chars: Optional[int] = None,
-) -> dict:
+) -> ReadTextFileResult:
     """Read text content from a file.
 
     Args:
@@ -108,7 +161,7 @@ def read_text_file_many(
     times: int = 10,
     include_content: bool = False,
     max_chars: Optional[int] = None,
-) -> dict:
+) -> ReadTextFileManyResult:
     """Read a file multiple times.
 
     Args:

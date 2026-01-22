@@ -167,156 +167,33 @@ if PYDANTIC_AI_AVAILABLE:
 
         async def get_tools(self, ctx: RunContext) -> dict[str, ToolsetTool]:
             """Get the tools provided by this toolset."""
+            from .tool_definitions import get_tool_schema
+            
             tools = {}
             
             if self.allow_discovery_tools:
-                # list_tool_names - Fast listing without descriptions
-                tools["list_tool_names"] = ToolsetTool(
-                    toolset=self,
-                    tool_def=ToolDefinition(
-                        name="list_tool_names",
-                        description="""List all available tool names quickly.
-                    
-Use this for a fast overview of available tools. Returns only names
-without descriptions or schemas. Use get_tool_details for full info.""",
-                        parameters_json_schema={
-                            "type": "object",
-                            "properties": {
-                                "server": {
-                                    "type": "string",
-                                    "description": "Optional: filter by MCP server name",
-                                },
-                                "keywords": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                    "description": "Optional: filter by keyword matches",
-                                },
-                                "limit": {
-                                    "type": "integer",
-                                    "description": "Optional: maximum number of tool names",
-                                    "default": 100,
-                                },
-                                "include_deferred": {
-                                    "type": "boolean",
-                                    "description": "Whether to include deferred tools",
-                                    "default": False,
-                                },
-                            },
-                            "required": [],
-                        },
-                    ),
-                    max_retries=0,
-                    args_validator=CODEMODE_ARGS_VALIDATOR,
-                )
-            
-                # search_tools
-                tools["search_tools"] = ToolsetTool(
-                    toolset=self,
-                    tool_def=ToolDefinition(
-                        name="search_tools",
-                        description="""Search for available tools matching a query.
-                    
-Use this to discover relevant tools before deciding which ones to use.
-Returns tool names, descriptions, and input schemas.""",
-                        parameters_json_schema={
-                            "type": "object",
-                            "properties": {
-                                "query": {
-                                    "type": "string",
-                                    "description": "Natural language description of what you're looking for",
-                                },
-                                "server": {
-                                    "type": "string",
-                                    "description": "Optional: filter by MCP server name",
-                                },
-                                "limit": {
-                                    "type": "integer",
-                                    "description": "Maximum number of results (default: 10)",
-                                    "default": 10,
-                                },
-                                "include_deferred": {
-                                    "type": "boolean",
-                                    "description": "Whether to include deferred tools",
-                                    "default": True,
-                                },
-                            },
-                            "required": ["query"],
-                        },
-                    ),
-                    max_retries=0,
-                    args_validator=CODEMODE_ARGS_VALIDATOR,
-                )
-            
-                # get_tool_details
-                tools["get_tool_details"] = ToolsetTool(
-                    toolset=self,
-                    tool_def=ToolDefinition(
-                        name="get_tool_details",
-                        description="Get detailed information about a specific tool including full schema.",
-                        parameters_json_schema={
-                            "type": "object",
-                            "properties": {
-                                "tool_name": {
-                                    "type": "string",
-                                    "description": "The full tool name (format: server__toolname)",
-                                },
-                            },
-                            "required": ["tool_name"],
-                        },
-                    ),
-                    max_retries=0,
-                    args_validator=CODEMODE_ARGS_VALIDATOR,
-                )
-            
-                # list_servers
-                tools["list_servers"] = ToolsetTool(
-                    toolset=self,
-                    tool_def=ToolDefinition(
-                        name="list_servers",
-                        description="List all connected MCP servers and their tool counts.",
-                        parameters_json_schema={
-                            "type": "object",
-                            "properties": {},
-                            "required": [],
-                        },
-                    ),
-                    max_retries=0,
-                    args_validator=CODEMODE_ARGS_VALIDATOR,
-                )
+                # Discovery tools
+                for tool_name in ["list_tool_names", "search_tools", "get_tool_details", "list_servers"]:
+                    schema = get_tool_schema(tool_name)
+                    tools[tool_name] = ToolsetTool(
+                        toolset=self,
+                        tool_def=ToolDefinition(
+                            name=tool_name,
+                            description=schema["description"],
+                            parameters_json_schema=schema["parameters"],
+                        ),
+                        max_retries=0,
+                        args_validator=CODEMODE_ARGS_VALIDATOR,
+                    )
             
             # execute_code - always available
+            schema = get_tool_schema("execute_code")
             tools["execute_code"] = ToolsetTool(
                 toolset=self,
                 tool_def=ToolDefinition(
                     name="execute_code",
-                    description="""Execute Python code that composes and calls tools.
-
-Write Python code that orchestrates tool calls. The code runs in an isolated sandbox.
-
-IMPORTANT - Import format: Use `from generated.servers.<server_name> import <function_name>`
-- Server name is the MCP server name (e.g., 'tavily', 'filesystem')  
-- Function names use underscores, not dashes (e.g., 'tavily_search', not 'tavily-search')
-- NEVER use `import *` - always use explicit named imports
-- Call list_servers or list_tool_names first to get exact import paths
-
-Example: `from generated.servers.tavily import tavily_search`
-
-Always use try/except and print() for output.""",
-                    parameters_json_schema={
-                        "type": "object",
-                        "properties": {
-                            "code": {
-                                "type": "string",
-                                "description": "Python code to execute. Can use async/await. NEVER use 'import *'.",
-                            },
-                            "timeout": {
-                                "type": "number",
-                                "description": "Maximum execution time in seconds (default: 30)",
-                                "default": 30,
-                            },
-                        },
-                        "required": ["code"],
-                    },
+                    description=schema["description"],
+                    parameters_json_schema=schema["parameters"],
                 ),
                 max_retries=0,
                 args_validator=CODEMODE_ARGS_VALIDATOR,
@@ -324,25 +201,13 @@ Always use try/except and print() for output.""",
             
             # call_tool (optional)
             if self.allow_direct_tool_calls:
+                schema = get_tool_schema("call_tool")
                 tools["call_tool"] = ToolsetTool(
                     toolset=self,
                     tool_def=ToolDefinition(
                         name="call_tool",
-                        description="Call a single tool directly. For complex multi-tool operations, prefer execute_code.",
-                        parameters_json_schema={
-                            "type": "object",
-                            "properties": {
-                                "tool_name": {
-                                    "type": "string",
-                                    "description": "The full tool name (format: server__toolname)",
-                                },
-                                "arguments": {
-                                    "type": "object",
-                                    "description": "Arguments matching the tool's input schema",
-                                },
-                            },
-                            "required": ["tool_name", "arguments"],
-                        },
+                        description=schema["description"],
+                        parameters_json_schema=schema["parameters"],
                     ),
                     max_retries=1,
                     args_validator=CODEMODE_ARGS_VALIDATOR,
@@ -555,7 +420,7 @@ Always use try/except and print() for output.""",
             
             try:
                 start_time = time.monotonic()
-                # print(f"[TOOLSET] Calling executor.execute()...", file=sys.stderr, flush=True)
+                print(f"[TOOLSET] Calling executor.execute()...", file=sys.stderr, flush=True)
                 execution = await self._executor.execute(code, timeout=timeout)
                 print(f"[TOOLSET] executor.execute() returned - stdout: {execution.logs.stdout_text!r}, stderr: {execution.logs.stderr_text!r}, error: {execution.error}", file=sys.stderr, flush=True)
                 elapsed = time.monotonic() - start_time
@@ -616,100 +481,6 @@ Always use try/except and print() for output.""",
                 "codemode_tool_calls": self._codemode_call_count,
                 "mcp_tool_calls": mcp_calls,
             }
-        
-        async def get_instructions(self, ctx: RunContext | None = None) -> str:
-            """Get instructions for system prompt injection."""
-            tools_block = [
-                "**list_tool_names** - Fast listing of tool names (use get_tool_details for schemas)",
-                "**search_tools** - Discover tools by natural language query",
-                "**get_tool_details** - Get the full schema for a specific tool",
-                "**list_servers** - List connected MCP servers",
-            ]
-            if self.allow_direct_tool_calls:
-                tools_block.append("**call_tool** - Call a single tool directly")
-            tools_block.append("**execute_code** - Execute Python code in a sandboxed environment")
-
-            lines = [
-                "<codemode>",
-                "You have access to Code Mode for efficient tool composition.",
-                "",
-                "## Available Tools",
-            ]
-            for idx, entry in enumerate(tools_block, start=1):
-                lines.append(f"{idx}. {entry}")
-            lines.extend([
-                "",
-                "## Tool Execution Model",
-                "Write Python code in execute_code to compose multiple tools with async/await.",
-                "Import bindings: `from generated.servers.<server_name> import <function_name>`",
-                "NEVER use `import *` - always use explicit named imports.",
-                "ALWAYS call list_servers first to discover available tools and their exact import paths.",
-            ])
-            if self.allow_direct_tool_calls:
-                lines.append("For quick single-tool calls, call_tool is available.")
-            else:
-                lines.append("Use execute_code for tool calls (direct calls are disabled in this configuration).")
-
-            lines.extend([
-                "",
-                "## Workflow",
-                "1. **Discover tools** using list_tool_names (deferred tools hidden by default), search_tools (includes deferred tools), or get_tool_details",
-            ])
-            if self.allow_direct_tool_calls:
-                lines.append("2. **Simple operations**: Use call_tool(tool_name, arguments)")
-                lines.append("3. **Complex operations**: Write Python code in execute_code")
-            else:
-                lines.append("2. **Operations**: Write Python code in execute_code")
-
-            lines.extend([
-                "",
-                "## Examples",
-            ])
-            if self.allow_direct_tool_calls:
-                lines.extend([
-                    "Simple tool call:",
-                    "```",
-                    "call_tool(tool_name=\"filesystem__read_file\", arguments={\"path\": \"/data/file.txt\"})",
-                    "```",
-                    "",
-                ])
-
-            lines.extend([
-                "Complex multi-tool composition:",
-                "```",
-                "execute_code(code='''",
-                "import asyncio",
-                "from generated.servers.filesystem import read_file, list_directory",
-                "",
-                "# List files and read in parallel",
-                "files = await list_directory({\"path\": \"/data\"})",
-                "contents = await asyncio.gather(*[",
-                "    read_file({\"path\": f\"/data/{f}\"})",
-                "    for f in files[\"entries\"] if f.endswith(\".txt\")",
-                "])",
-                "print(f\"Read {len(contents)} files\")",
-                "''')",
-                "```",
-                "",
-                "Helper template (retries + parallel):",
-                "````",
-                "execute_code(code='''",
-                "import asyncio",
-                "from agent_skills.helpers import retry, parallel",
-                "from generated.servers.filesystem import read_file",
-                "",
-                "async def fetch(path):",
-                "    return await retry(lambda: read_file({\"path\": path}), max_attempts=3)",
-                "",
-                "paths = [\"/data/a.txt\", \"/data/b.txt\"]",
-                "contents = await parallel(*(fetch(p) for p in paths))",
-                "print(contents)",
-                "''')",
-                "````",
-                "</codemode>",
-            ])
-
-            return "\n".join(lines)
 
 
 else:

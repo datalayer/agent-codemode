@@ -33,11 +33,11 @@ clean: ## clean
 test: ## Run tests
 	python -m pytest tests/ -v
 
-start-agent: ## Start the MCP agent CLI (stdio server)
-	python examples/agent/agent_cli.py
+start-agent: ## Start the MCP agent CLI (stdio server). Usage: make start-agent [MODEL=<model>]
+	python examples/agent/agent_cli.py $(if $(MODEL),--model $(MODEL),)
 
-start-agent-codemode: ## Start the Agent Codemode agent CLI (stdio server)
-	python examples/agent/agent_cli.py --codemode
+start-agent-codemode: ## Start the Agent Codemode agent CLI (stdio server). Usage: make start-agent-codemode [MODEL=<model>]
+	python examples/agent/agent_cli.py --codemode $(if $(MODEL),--model $(MODEL),)
 
 build-docker:
 	docker buildx build --platform linux/amd64,linux/arm64 -t datalayer/agent-codemode:${VERSION} .

@@ -14,99 +14,38 @@ This allows you to:
 
 ## Quick Start
 
-### Run as Command
+## Launcher Script
 
-Start the Codemode MCP server:
-
-```bash
-python -m agent_codemode.server
-```
-
-### Run Programmatically
+Create a launcher script to configure which MCP servers to compose:
 
 ```python
-from agent_codemode import codemode_server, configure_server
-from agent_codemode import ToolRegistry, MCPServerConfig, CodeModeConfig
+#!/usr/bin/env python3
+import sys
+from pathlib import Path
 
-# Create and configure registry with MCP servers to compose
+from agent_codemode import ToolRegistry, MCPServerConfig, CodeModeConfig
+from agent_codemode.server import configure, run
+
+# Create registry and add MCP servers to compose
 registry = ToolRegistry()
 registry.add_server(MCPServerConfig(
-    name="filesystem",
-    command="npx",
-    args=["-y", "@anthropic/mcp-server-filesystem", "/workspace"]
-))
-registry.add_server(MCPServerConfig(
-    name="github",
-    command="npx",
-    args=["-y", "@anthropic/mcp-server-github"],
-    env={"GITHUB_TOKEN": "your-token"}
+    name="my_tools",
+    command=sys.executable,
+    args=["/path/to/my_mcp_server.py"]
 ))
 
-# Configure the server
+# Configure paths
 config = CodeModeConfig(
-    workspace_path="/workspace",
-    skills_path="./skills",
+    workspace_path="./workspace",
     generated_path="./generated",
+    skills_path="./skills",
 )
 
-configure_server(config=config, registry=registry)
-
-# Run with stdio transport (default)
-from agent_codemode.server import run
+configure(config=config, registry=registry)
 run()
-
-# Or run with SSE transport on a specific port
-run(transport="sse", port=8000)
 ```
 
-## Server Configuration
-
-### Environment Variables
-
-```bash
-export CODEMODE_WORKSPACE="/workspace"
-export CODEMODE_GENERATED="/tmp/generated"
-export CODEMODE_SKILLS="./skills"
-export CODEMODE_TIMEOUT="60"
-export CODEMODE_SANDBOX="local"
-
-python -m agent_codemode.server
-```
-
-### Command Line Options
-
-```bash
-python -m agent_codemode.server --transport stdio  # Default: stdio transport
-python -m agent_codemode.server --transport sse --port 8000  # SSE transport
-```
-
-You can also set environment variables:
-
-```bash
-export CODEMODE_WORKSPACE="/workspace"
-export CODEMODE_GENERATED="/tmp/generated"
-export CODEMODE_SKILLS="./skills"
-export CODEMODE_TIMEOUT="60"
-export CODEMODE_SANDBOX="local"
-
-python -m agent_codemode.server
-```
-
-### Programmatic Configuration
-
-```python
-from agent_codemode import CodeModeConfig
-
-config = CodeModeConfig(
-    workspace_path="/workspace",           # Working directory
-    generated_path="/tmp/generated",       # Generated bindings location
-    skills_path="./skills",                # Skills directory
-    default_timeout=60.0,                  # Execution timeout
-    sandbox_variant="local",               # Sandbox type
-    allow_direct_tool_calls=False,         # Hide call_tool (force code mode)
-    max_tool_calls=100,                    # Safety cap per execution
-)
-```
+Then configure your MCP client to run the launcher script.
 
 ## Exposed Tools
 
