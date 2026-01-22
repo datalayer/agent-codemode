@@ -394,11 +394,9 @@ You are an AI assistant with access to MCP tools via Code Mode.
 ALL tool execution must go through execute_code. Write Python code that imports 
 and uses the generated tool bindings:
 
-```python
 from generated.servers.filesystem import read_file
 content = await read_file({"path": "/data/config.json"})
 print(content)
-```
 ```
 
 ## Workflow
