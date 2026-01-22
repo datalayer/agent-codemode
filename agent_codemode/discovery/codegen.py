@@ -129,6 +129,13 @@ async def call_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
     if not isinstance(result, (dict, object)) or result is None:
         return result
 
+    # Check for error response
+    is_error = False
+    if isinstance(result, dict):
+        is_error = result.get("isError", False)
+    elif hasattr(result, "isError"):
+        is_error = result.isError
+
     # Extract content list
     content_list = None
     if isinstance(result, dict):
@@ -157,6 +164,10 @@ async def call_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
         if part_type == "text" and part_text is not None:
             text_content += part_text
             has_text = True
+    
+    # If this was an error response, raise an exception
+    if is_error and has_text:
+        raise RuntimeError(text_content)
             
     if has_text:
         # Try to parse as JSON first, as many tools return JSON string

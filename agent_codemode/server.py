@@ -56,17 +56,28 @@ def configure(
     global _registry, _executor, _config
     
     _config = config or CodeModeConfig()
-    _registry = registry or ToolRegistry()
+    
+    if registry is not None:
+        logger.debug(f"Using provided registry with {len(registry._servers)} servers")
+        logger.debug(f"Server names: {list(registry._servers.keys())}")
+        _registry = registry
+    else:
+        logger.debug("Creating new empty registry")
+        _registry = ToolRegistry()
+    
     _executor = CodeModeExecutor(_registry, _config)
     
-    logger.debug("Codemode MCP server configured")
+    logger.info(f"Codemode MCP server configured with {len(_registry._servers)} servers")
 
 
 def get_registry() -> ToolRegistry:
     """Get the tool registry."""
     global _registry
     if _registry is None:
+        logger.debug("Registry is None, calling configure()")
         configure()
+    else:
+        logger.debug(f"Returning existing registry with {len(_registry._servers)} servers")
     return _registry
 
 
@@ -82,308 +93,101 @@ def get_executor() -> CodeModeExecutor:
 # Tool Definitions
 # =============================================================================
 
-TOOLS = [
-    types.Tool(
-        name="search_tools",
-        description="""Search for available tools matching a query.
-
-This is the Tool Search Tool - use it to discover relevant tools
-before deciding which ones to use. Especially useful when there
-are many tools available (100+).
-
-Instead of loading all tool definitions upfront, this allows
-progressive discovery of relevant tools based on your task.
-
-Example:
-    # Find tools for working with files
-    result = search_tools("read and write files")
-    # Returns: {"tools": [{"name": "fs__read_file", ...}], "total": 5}""",
-        inputSchema={
-            "type": "object",
-            "required": ["query"],
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Natural language description of what you're looking for. Examples: 'file operations', 'data analysis', 'web scraping'",
-                },
-                "server": {
-                    "type": "string",
-                    "description": "Optional filter by MCP server name.",
-                },
-                "category": {
-                    "type": "string",
-                    "description": "Optional filter by category (e.g., 'filesystem', 'network').",
-                },
-                "limit": {
-                    "type": "integer",
-                    "default": 10,
-                    "description": "Maximum number of results to return (default: 10).",
-                },
-                "include_deferred": {
-                    "type": "boolean",
-                    "default": True,
-                    "description": "Whether to include tools marked defer_loading.",
-                },
-            },
-        },
-    ),
-    types.Tool(
-        name="list_tool_names",
-        description="""List available tool names.
-
-Fast way to see what tools exist without loading full definitions.
-Useful for checking if specific tools are available.""",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "server": {
-                    "type": "string",
-                    "description": "Optional server name to filter by",
-                },
-                "keywords": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Optional keywords to filter by",
-                },
-                "limit": {
-                    "type": "integer",
-                    "description": "Maximum number of names (default: 100)",
-                    "default": 100,
-                },
-                    "include_deferred": {
-                        "type": "boolean",
-                        "description": "Whether to include tools marked defer_loading.",
-                        "default": False,
-                    },
-            },
-        },
-    ),
-    types.Tool(
-        name="list_servers",
-        description="""List all connected MCP servers.
-
-Returns information about all MCP servers that are currently
-connected and available for tool discovery.""",
-        inputSchema={
-            "type": "object",
-            "properties": {},
-        },
-    ),
-    types.Tool(
-        name="get_tool_details",
-        description="""Get detailed information about a specific tool.
-
-After finding a tool with search_tools, use this to get
-the full schema and usage information.""",
-        inputSchema={
-            "type": "object",
-            "required": ["tool_name"],
-            "properties": {
-                "tool_name": {
-                    "type": "string",
-                    "description": "The full tool name (format: server__toolname).",
-                },
-            },
-        },
-    ),
-    types.Tool(
-        name="execute_code",
-        description="""Execute Python code that can compose and call tools.
-
-This is the core of Code Mode - instead of calling tools one by one,
-write Python code that orchestrates multiple tool calls efficiently.
-
-The code runs in an isolated sandbox with:
-- Access to all discovered tools as Python functions
-- Async/await support for parallel tool calls
-- State persistence between calls
-- Error handling and result capture
-
-Benefits of Code Mode:
-- Reduce LLM calls for multi-step operations
-- Better error handling with try/except
-- Parallel execution with asyncio.gather
-- Complex logic with loops and conditionals
-
-Example:
-    # Read multiple files in parallel
-    code = '''
-    import asyncio
-    from generated.servers.filesystem import read_file
+def _build_tools() -> list[types.Tool]:
+    """Build MCP tool definitions from shared schemas."""
+    from .tool_definitions import TOOL_SCHEMAS
     
-    files = ["/path/file1.txt", "/path/file2.txt"]
-    results = await asyncio.gather(*[read_file({"path": f}) for f in files])
-    '''
-    result = execute_code(code)""",
-        inputSchema={
-            "type": "object",
-            "required": ["code"],
-            "properties": {
-                "code": {
-                    "type": "string",
-                    "description": "Python code to execute. Can use `await` for async operations. Import tools from `generated.servers.<server_name>`.",
-                },
-                "timeout": {
-                    "type": "number",
-                    "default": 30.0,
-                    "description": "Maximum execution time in seconds (default: 30).",
-                },
-                "context": {
-                    "type": "object",
-                    "description": "Optional variables to inject into the execution context.",
+    tools = []
+    
+    # Core codemode tools
+    for name in ["search_tools", "list_tool_names", "list_servers", "get_tool_details", 
+                 "execute_code", "call_tool"]:
+        schema = TOOL_SCHEMAS[name]
+        tools.append(types.Tool(
+            name=name,
+            description=schema["description"],
+            inputSchema=schema["parameters"],
+        ))
+    
+    # Skill management tools
+    tools.extend([
+        types.Tool(
+            name="save_skill",
+            description="Save a reusable skill (code-based tool composition).",
+            inputSchema={
+                "type": "object",
+                "required": ["name", "code", "description"],
+                "properties": {
+                    "name": {"type": "string", "description": "Unique skill name"},
+                    "code": {"type": "string", "description": "Python code"},
+                    "description": {"type": "string", "description": "What the skill does"},
+                    "tags": {"type": "array", "items": {"type": "string"}},
+                    "parameters": {"type": "object"},
                 },
             },
-        },
-    ),
-    types.Tool(
-        name="call_tool",
-        description="""Call a single tool directly.
+        ),
+        types.Tool(
+            name="run_skill",
+            description="Execute a saved skill.",
+            inputSchema={
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                    "name": {"type": "string", "description": "Skill name"},
+                    "arguments": {"type": "object"},
+                },
+            },
+        ),
+        types.Tool(
+            name="list_skills",
+            description="List available skills.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tags": {"type": "array", "items": {"type": "string"}},
+                },
+            },
+        ),
+        types.Tool(
+            name="delete_skill",
+            description="Delete a saved skill.",
+            inputSchema={
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                    "name": {"type": "string"},
+                },
+            },
+        ),
+        types.Tool(
+            name="get_execution_history",
+            description="Get recent tool execution history.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "default": 10},
+                },
+            },
+        ),
+        types.Tool(
+            name="add_mcp_server",
+            description="Add a new MCP server to discover tools from.",
+            inputSchema={
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                    "name": {"type": "string"},
+                    "url": {"type": "string"},
+                    "command": {"type": "string"},
+                    "args": {"type": "array", "items": {"type": "string"}},
+                },
+            },
+        ),
+    ])
+    
+    return tools
 
-For simple cases where you just need to call one tool,
-this provides direct access without writing code.
-
-For complex multi-tool operations, prefer execute_code().""",
-        inputSchema={
-            "type": "object",
-            "required": ["tool_name", "arguments"],
-            "properties": {
-                "tool_name": {
-                    "type": "string",
-                    "description": "The full tool name (format: server__toolname).",
-                },
-                "arguments": {
-                    "type": "object",
-                    "description": "Arguments to pass to the tool.",
-                },
-            },
-        },
-    ),
-    types.Tool(
-        name="save_skill",
-        description="""Save a reusable skill (code-based tool composition).
-
-Skills are saved code snippets that can be executed later.
-Think of them as macros or recipes for common multi-tool operations.""",
-        inputSchema={
-            "type": "object",
-            "required": ["name", "code", "description"],
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "Unique name for the skill.",
-                },
-                "code": {
-                    "type": "string",
-                    "description": "Python code implementing the skill.",
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Human-readable description of what it does.",
-                },
-                "tags": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Optional list of tags for categorization.",
-                },
-                "parameters": {
-                    "type": "object",
-                    "description": "Optional JSON schema for skill parameters.",
-                },
-            },
-        },
-    ),
-    types.Tool(
-        name="run_skill",
-        description="""Execute a saved skill.""",
-        inputSchema={
-            "type": "object",
-            "required": ["name"],
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "Name of the skill to execute.",
-                },
-                "arguments": {
-                    "type": "object",
-                    "description": "Optional arguments to pass to the skill.",
-                },
-            },
-        },
-    ),
-    types.Tool(
-        name="list_skills",
-        description="""List available skills.""",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "tags": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Optional filter by tags.",
-                },
-            },
-        },
-    ),
-    types.Tool(
-        name="delete_skill",
-        description="""Delete a saved skill.""",
-        inputSchema={
-            "type": "object",
-            "required": ["name"],
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "Name of the skill to delete.",
-                },
-            },
-        },
-    ),
-    types.Tool(
-        name="get_execution_history",
-        description="""Get recent tool execution history.
-
-Useful for debugging and understanding what tools have been called.""",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "limit": {
-                    "type": "integer",
-                    "default": 10,
-                    "description": "Maximum number of entries to return.",
-                },
-            },
-        },
-    ),
-    types.Tool(
-        name="add_mcp_server",
-        description="""Add a new MCP server to discover tools from.
-
-Supports both HTTP-based and stdio-based MCP servers.""",
-        inputSchema={
-            "type": "object",
-            "required": ["name"],
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "Unique name for the server.",
-                },
-                "url": {
-                    "type": "string",
-                    "description": "HTTP URL for HTTP-based servers.",
-                },
-                "command": {
-                    "type": "string",
-                    "description": "Command to run for stdio-based servers.",
-                },
-                "args": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Arguments for the command.",
-                },
-            },
-        },
-    ),
-]
+TOOLS = _build_tools()
 
 
 # =============================================================================
@@ -510,28 +314,16 @@ async def handle_execute_code(arguments: dict[str, Any]) -> dict[str, Any]:
         
         return {
             "success": not execution.error,
-            "result": execution.text,
-            "results": [
-                {
-                    "data": r.data,
-                    "is_main_result": r.is_main_result,
-                    "extra": r.extra,
-                }
-                for r in execution.results
-            ],
             "stdout": execution.stdout,
             "stderr": execution.stderr,
-            "output": execution.stdout,
-            "execution_time": execution.execution_time or 0,
             "error": str(execution.error) if execution.error else None,
         }
     except Exception as e:
-        logger.debug("Code execution failed", exc_info=e)
+        logger.error("Code execution failed", exc_info=e)
         return {
             "success": False,
             "result": None,
             "output": "",
-            "execution_time": 0,
             "error": str(e),
         }
 
@@ -608,18 +400,9 @@ async def handle_run_skill(arguments: dict[str, Any]) -> dict[str, Any]:
         return {
             "success": not execution.error,
             "result": execution.text,
-            "results": [
-                {
-                    "data": r.data,
-                    "is_main_result": r.is_main_result,
-                    "extra": r.extra,
-                }
-                for r in execution.results
-            ],
             "stdout": execution.stdout,
             "stderr": execution.stderr,
             "output": execution.stdout,
-            "execution_time": execution.execution_time or 0,
             "error": str(execution.error) if execution.error else None,
         }
     except Exception as e:
@@ -787,54 +570,65 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
         raise ValueError(f"Unknown tool: {name}")
     
     result = await handler(arguments)
-    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+    json_str = json.dumps(result, indent=2)
+    return [types.TextContent(type="text", text=json_str)]
 
 
 # =============================================================================
 # Server Entry Points
 # =============================================================================
 
-def run(transport: str = "stdio", port: int = 8000) -> None:
+def run(transport: str = "stdio", host: str = "127.0.0.1", port: int = 8000) -> None:
     """Run the MCP server.
     
     Args:
-        transport: Transport type - "stdio" or "sse" (default: "stdio").
-        port: Port for SSE transport (default: 8000).
+        transport: Transport type - "stdio" or "streamable-http" (default: "stdio").
+        host: Host for HTTP transport (default: "127.0.0.1").
+        port: Port for HTTP transport (default: 8000).
     """
-    configure()
+    # Note: configure() should be called by launcher before run()
+    # Ensure registry is initialized (will use existing if already configured)
+    if _registry is None:
+        configure()
     
-    if transport == "sse":
-        from mcp.server.sse import SseServerTransport
+    if transport == "streamable-http":
+        from mcp.server.streamable_http import StreamableHTTPServerTransport
         from starlette.applications import Starlette
-        from starlette.responses import Response
-        from starlette.routing import Mount, Route
-        from starlette.requests import Request
+        from starlette.routing import Route
         import uvicorn
 
-        sse = SseServerTransport("/messages/")
-
-        async def handle_sse(request: Request):
-            async with sse.connect_sse(
-                request.scope, request.receive, request._send
-            ) as streams:
+        async def handle_mcp(request):
+            async with StreamableHTTPServerTransport(
+                "/mcp", request.scope, request.receive, request._send
+            ) as transport:
                 await mcp.run(
-                    streams[0], streams[1], mcp.create_initialization_options()
+                    transport.read_stream,
+                    transport.write_stream,
+                    mcp.create_initialization_options(),
                 )
-            return Response()
 
         starlette_app = Starlette(
             debug=True,
             routes=[
-                Route("/sse", endpoint=handle_sse, methods=["GET"]),
-                Mount("/messages/", app=sse.handle_post_message),
+                Route("/mcp", endpoint=handle_mcp, methods=["POST"]),
             ],
         )
 
-        uvicorn.run(starlette_app, host="127.0.0.1", port=port)
+        uvicorn.run(starlette_app, host=host, port=port)
     else:
         from mcp.server.stdio import stdio_server
 
         async def arun():
+            # Do discovery before accepting requests to avoid blocking during tool calls
+            registry = get_registry()
+            if registry and not registry.list_tools():
+                logger.info("Performing upfront discovery before starting server...")
+                try:
+                    await registry.discover_all()
+                    logger.info(f"Upfront discovery complete: {len(registry.list_tools())} tools")
+                except Exception as e:
+                    logger.warning(f"Upfront discovery failed: {e}")
+            
             async with stdio_server() as streams:
                 await mcp.run(
                     streams[0], streams[1], mcp.create_initialization_options()
@@ -847,6 +641,7 @@ if __name__ == "__main__":
     import sys
     
     transport = "stdio"
+    host = "127.0.0.1"
     port = 8000
     
     # Simple CLI argument parsing
@@ -854,7 +649,9 @@ if __name__ == "__main__":
     for i, arg in enumerate(args):
         if arg == "--transport" and i + 1 < len(args):
             transport = args[i + 1]
+        elif arg == "--host" and i + 1 < len(args):
+            host = args[i + 1]
         elif arg == "--port" and i + 1 < len(args):
             port = int(args[i + 1])
     
-    run(transport=transport, port=port)
+    run(transport=transport, host=host, port=port)

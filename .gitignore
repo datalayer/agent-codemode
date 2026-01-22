@@ -130,3 +130,5 @@ skills
 examples/agent/*.txt
 
 !docs/docs/skills
+
+launcher.py

@@ -14,6 +14,28 @@
 
 **Generate programmatic tools from MCP Servers and Skills.**
 
+<p align="center">
+  <img src="https://images.datalayer.io/products/mcp-codemode/demo-claude-list-tools.png" width="55%" alt="" />
+  <img src="https://images.datalayer.io/products/mcp-codemode/demo-claude-execute-code.png" width="44%" alt="" />
+</p>
+
+Same task, same MCP server — Code Mode uses significantly fewer tokens by composing tools in code instead of multiple LLM round-trips.
+
+<table align="center">
+  <tr>
+    <th>Without Code Mode</th>
+    <th>With Code Mode</th>
+  </tr>
+  <tr>
+    <td><img src="https://images.datalayer.io/products/mcp-codemode/tokens-non-codemode.png" width="100%" alt="Without Code Mode" /></td>
+    <td><img src="https://images.datalayer.io/products/mcp-codemode/tokens-codemode.png" width="100%" alt="With Code Mode" /></td>
+  </tr>
+</table>
+
+<p align="center">
+  <em>Prompt: "Generate 2000 words of random text and write to a file"</em>
+</p>
+
 ## What is Agent Codemode?
 
 Agent Codemode generates **programmatic tools** from two sources:
@@ -308,12 +330,46 @@ Or start with command line:
 python -m agent_codemode.server --workspace ./workspace
 ```
 
+### Connect to an MCP Client
+
+Create a launcher script to configure which MCP servers to compose:
+
+```python
+#!/usr/bin/env python3
+import sys
+from pathlib import Path
+
+from agent_codemode import ToolRegistry, MCPServerConfig, CodeModeConfig
+from agent_codemode.server import configure, run
+
+# Create registry and add MCP servers to compose
+registry = ToolRegistry()
+registry.add_server(MCPServerConfig(
+    name="my_server",
+    command=sys.executable,
+    args=["/path/to/my_mcp_server.py"]
+))
+
+# Configure paths
+config = CodeModeConfig(
+    workspace_path="./workspace",
+    generated_path="./generated",
+    skills_path="./skills",
+)
+
+configure(config=config, registry=registry)
+run()
+```
+
+Then configure your MCP client to run the launcher script.
+
 **Tools exposed by the MCP server:**
 
 | Tool | Description |
 |------|-------------|
 | `search_tools` | Progressive tool discovery |
 | `list_servers` | List connected MCP servers |
+| `list_tool_names` | Fast listing of tool names |
 | `get_tool_details` | Get full tool schema |
 | `execute_code` | Run code that composes tools |
 | `call_tool` | Direct tool invocation |
@@ -343,12 +399,14 @@ from generated.servers.filesystem import read_file
 content = await read_file({"path": "/data/config.json"})
 print(content)
 ```
+```
 
 ## Workflow
+
 1. Discover tools using search_tools or list_tool_names
 2. Write Python code that imports tools from generated.servers.<name>
 3. Execute using execute_code
-```
+
 
 See the [Getting Started guide](https://agent-codemode.datalayer.tech/getting-started) for a complete system prompt example.
 

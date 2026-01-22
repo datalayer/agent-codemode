@@ -80,6 +80,11 @@ def _build_system_prompt(
     lines = [
         "You are a helpful AI assistant with Agent Codemode.",
         "",
+        "## IMPORTANT: Be Honest About Your Capabilities",
+        "NEVER claim to have tools or capabilities you haven't verified.",
+        "When greeting users or describing yourself, say you can DISCOVER what tools are available.",
+        "Use search_tools FIRST to see what's actually available before claiming any capabilities.",
+        "",
         "## Core Codemode Tools",
         "Use these 4 tools to accomplish any task:",
         "",
@@ -412,6 +417,7 @@ def main() -> None:
     async def _run_cli() -> None:
         prompt = "𝄃𝄂𝄂𝄀𝄁𝄃𝄂𝄂𝄃 agent-codemode-agent ➤ " if codemode else "mcp-agent ➤ "
         multiline = False
+        message_history = []  # Store conversation history
         session_usage: dict[str, float] = {
             "input_tokens": 0.0,
             "output_tokens": 0.0,
@@ -468,35 +474,11 @@ def main() -> None:
                 if user_input == "/cp":
                     print("Clipboard copy is not enabled in this minimal CLI.")
                     continue
-                normalized = user_input.strip().lower()
-                if codemode and normalized in {
-                    "what are your tools",
-                    "what tools do you have",
-                    "list tools",
-                    "show tools",
-                    "/tools",
-                }:
-                    tools = await _list_available_tools(
-                        codemode=codemode,
-                        codemode_toolset=codemode_toolset,
-                        mcp_server_path=mcp_server_path,
-                    )
-                    if tools:
-                        print("\nAvailable tools:")
-                        for name, description in tools:
-                            if description:
-                                print(f"  - {name}: {description}")
-                            else:
-                                print(f"  - {name}")
-                        print()
-                    else:
-                        print("No tools available.")
-                    continue
 
                 run_result = None
                 run_usage = None
                 iteration_count = 0
-                async with agent.iter(user_input) as run:
+                async with agent.iter(user_input, message_history=message_history) as run:
                     async for node in run:
                         iteration_count += 1
                         node_type = type(node).__name__
@@ -525,6 +507,8 @@ def main() -> None:
                                 logger.debug("    -> data: %s", str(data)[:200])
                     run_result = run.result
                     run_usage = run.usage()
+                    # Update message history with the conversation
+                    message_history = run.all_messages()
 
                 if run_result is None:
                     print("No result returned.")

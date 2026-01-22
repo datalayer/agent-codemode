@@ -308,13 +308,9 @@ except ImportError:
             import sys
             # print("[EXECUTOR DEBUG] Starting setup_code execution...", file=sys.stderr, flush=True)
             self._sandbox.run_code(setup_code)
-            # print("[EXECUTOR DEBUG] Setup_code completed", file=sys.stderr, flush=True)
-            
-            print(f"[EXECUTOR] Executing code in sandbox:\n{code}\n", file=sys.stderr, flush=True)
             
             # For async code, we need to handle it specially to avoid event loop conflicts
             if "await " in code or "async " in code:
-                # print(f"[EXECUTOR DEBUG] Detected async code, running in current event loop...", file=sys.stderr, flush=True)
                 # Get the namespace and execute async code directly in current loop
                 namespace = self._sandbox._namespaces[self._sandbox._default_context.id]
                 
