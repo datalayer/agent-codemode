@@ -107,16 +107,24 @@ for i, content in enumerate(contents):
 
 Same task, same MCP server — Code Mode uses significantly fewer tokens by composing tools in code instead of multiple LLM round-trips.
 
-<table align="center">
-  <tr>
-    <th>Without Code Mode</th>
-    <th>With Code Mode</th>
-  </tr>
-  <tr>
-    <td><img src="https://images.datalayer.io/products/mcp-codemode/tokens-non-codemode.png" width="100%" alt="Without Code Mode" /></td>
-    <td><img src="https://images.datalayer.io/products/mcp-codemode/tokens-codemode.png" width="100%" alt="With Code Mode" /></td>
-  </tr>
-</table>
+<div style={{display: 'flex', justifyContent: 'center', gap: '1rem'}}>
+  <div style={{width: '50%', textAlign: 'center'}}>
+    <strong>Without Code Mode</strong>
+    <ModalImage
+      small="https://images.datalayer.io/products/mcp-codemode/tokens-non-codemode.png"
+      large="https://images.datalayer.io/products/mcp-codemode/tokens-non-codemode.png"
+      alt="Without Code Mode"
+    />
+  </div>
+  <div style={{width: '50%', textAlign: 'center'}}>
+    <strong>With Code Mode</strong>
+    <ModalImage
+      small="https://images.datalayer.io/products/mcp-codemode/tokens-codemode.png"
+      large="https://images.datalayer.io/products/mcp-codemode/tokens-codemode.png"
+      alt="With Code Mode"
+    />
+  </div>
+</div>
 
 <p align="center">
   <em>Prompt: "Generate 2000 words of random text and write to a file"</em>
