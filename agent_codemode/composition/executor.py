@@ -7,6 +7,20 @@
 This is the core component that enables programmatic tool composition,
 running code that imports and calls generated tool bindings without
 LLM inference overhead.
+
+Identity Context Support:
+    The executor supports automatic injection of OAuth identity tokens
+    into the execution environment. When identities are set in the request
+    context (via agent_runtimes.context.identities), they are automatically
+    made available as environment variables in the sandbox:
+    
+    - GITHUB_TOKEN for GitHub OAuth
+    - GITLAB_TOKEN for GitLab OAuth
+    - GOOGLE_ACCESS_TOKEN for Google OAuth
+    - AZURE_ACCESS_TOKEN for Microsoft OAuth
+    
+    This allows code executed via execute_code to access authenticated
+    APIs without explicitly passing credentials.
 """
 
 import asyncio
@@ -20,6 +34,22 @@ from code_sandboxes import Sandbox, Execution, SandboxConfig
 from ..discovery.registry import ToolRegistry
 from ..discovery.codegen import PythonCodeGenerator
 from ..models import CodeModeConfig, ToolCallResult
+
+
+def _get_identity_env() -> dict[str, str]:
+    """Get identity environment variables from request context.
+    
+    This function attempts to import the identity context from agent_runtimes.
+    If not available (standalone codemode usage), returns empty dict.
+    
+    Returns:
+        Dictionary of environment variable names to token values.
+    """
+    try:
+        from agent_runtimes.context.identities import get_identity_env
+        return get_identity_env()
+    except ImportError:
+        return {}
 
 
 class CodeModeExecutor:
@@ -234,6 +264,9 @@ except ImportError:
 
         The code can import from the generated modules and call tools
         using async/await syntax.
+        
+        Identity tokens from the request context are automatically injected
+        as environment variables (e.g., GITHUB_TOKEN, GITLAB_TOKEN).
 
         Args:
             code: Python code to execute.
@@ -255,14 +288,27 @@ except ImportError:
         self._tool_calls_in_run = 0
 
         try:
+            # Get identity environment variables from request context
+            identity_env = _get_identity_env()
+            
             # Get the generated path for sys.path setup
             generated_path = str(Path(self.config.generated_path).resolve())
 
             # Ensure executor is available in sandbox
             self._sandbox.set_variable("__executor__", self)
             
+            # Build identity injection code if we have tokens
+            identity_injection = ""
+            if identity_env:
+                # Inject identity tokens as environment variables in the sandbox
+                identity_injection = f"""
+# Inject identity tokens from OAuth context
+import os
+os.environ.update({identity_env!r})
+"""
+            
             # Set up the environment before running user code
-            setup_code = f'''
+            setup_code = f'''{identity_injection}
 import sys
 
 # Ensure generated path is first on sys.path and purge stale generated modules
