@@ -129,6 +129,7 @@ generated
 skills
 examples/agent/*.txt
 
-!docs/docs/skills
-
 launcher.py
+
+!docs/docs/skills
+!examples/**/skills

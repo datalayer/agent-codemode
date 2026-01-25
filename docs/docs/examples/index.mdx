@@ -5,34 +5,90 @@ sidebar_position: 9
 
 # Examples
 
-Run the examples from the examples folders.
+Agent Codemode includes three example categories that demonstrate different aspects of the framework.
 
-## Codemode Examples
+## 1. Simple Examples
 
-- Progressive discovery and code execution:
-	https://github.com/datalayer/agent-codemode/blob/main/examples/simple/codemode_example.py
-- Patterns overview:
-	https://github.com/datalayer/agent-codemode/blob/main/examples/simple/codemode_patterns_example.py
+Basic interactive CLI examples demonstrating MCP server integration with standard and codemode modes.
 
-```bash
-make codemode-example
-make codemode-patterns
-```
+**Location:** [`examples/simple/`](https://github.com/datalayer/agent-codemode/blob/main/examples/simple/)
 
-Make targets: https://github.com/datalayer/agent-codemode/blob/main/examples/simple/Makefile
-
-## Agent CLI Examples
-
-- CLI (stdio server):
-	https://github.com/datalayer/agent-codemode/blob/main/examples/agent/agent_cli.py
-- Minimal MCP server:
-	https://github.com/datalayer/agent-codemode/blob/main/examples/agent/example_mcp_server.py
+| Example | Description |
+|---------|-------------|
+| [`agent_cli.py`](https://github.com/datalayer/agent-codemode/blob/main/examples/simple/agent_cli.py) | Interactive CLI agent with MCP stdio server |
+| [`example_mcp_server.py`](https://github.com/datalayer/agent-codemode/blob/main/examples/simple/example_mcp_server.py) | Minimal MCP server with file tools |
 
 ```bash
+cd examples/simple
+
+# Standard MCP mode
 make agent
+
+# Codemode (code-first tool composition)
 make agent-codemode
 ```
 
-Make targets: https://github.com/datalayer/agent-codemode/blob/main/examples/agent/Makefile
+**Tools provided:**
+- `generate_random_text(word_count, seed)`
+- `write_text_file(path, content)`
+- `read_text_file(path, include_content, max_chars)`
+- `read_text_file_many(path, times, include_content, max_chars)`
 
-Skills examples live in agent-skills.
+## 2. Patterns Examples
+
+Examples demonstrating codemode patterns for progressive discovery and code execution.
+
+**Location:** [`examples/patterns/`](https://github.com/datalayer/agent-codemode/blob/main/examples/patterns/)
+
+| Example | Description |
+|---------|-------------|
+| [`codemode_example.py`](https://github.com/datalayer/agent-codemode/blob/main/examples/patterns/codemode_example.py) | Progressive discovery and code execution |
+| [`codemode_patterns_example.py`](https://github.com/datalayer/agent-codemode/blob/main/examples/patterns/codemode_patterns_example.py) | Overview of all codemode patterns |
+
+```bash
+cd examples/patterns
+
+# Run codemode example
+make codemode-example
+
+# Run patterns overview
+make codemode-patterns
+```
+
+## 3. Skills Examples
+
+Demonstrates codemode with agent-skills integration. Uses the skills from the `skills/` folder for document processing capabilities.
+
+**Location:** [`examples/skills/`](https://github.com/datalayer/agent-codemode/blob/main/examples/skills/)
+
+| Example | Description |
+|---------|-------------|
+| [`agent_cli.py`](https://github.com/datalayer/agent-codemode/blob/main/examples/skills/agent_cli.py) | Skills-enabled agent CLI (codemode by default) |
+| [`example_mcp_server.py`](https://github.com/datalayer/agent-codemode/blob/main/examples/skills/example_mcp_server.py) | MCP server with file tools |
+
+```bash
+cd examples/skills
+
+# Run with skills (codemode is the default)
+make agent
+
+# Explicitly run in standard MCP mode
+make agent-standard
+```
+
+**Available Skills:**
+
+The `skills/` folder contains skill definitions that the agent can discover and use:
+
+| Skill | Description |
+|-------|-------------|
+| `pdf` | PDF manipulation toolkit - extract text/tables, merge/split documents, fill forms |
+
+**Example prompts:**
+```
+> What skills do you have available?
+> Extract text from document.pdf
+> Fill out the form in application.pdf with my details
+```
+
+For more on skills, see the [agent-skills](https://github.com/datalayer/agent-skills) repository.

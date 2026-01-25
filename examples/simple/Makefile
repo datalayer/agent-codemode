@@ -2,15 +2,19 @@ SHELL=/bin/bash
 
 .DEFAULT_GOAL := help
 
-.PHONY: help codemode-example codemode-patterns
+.PHONY: help agent agent-codemode clean-codemode
 
 help:
 	@echo "Targets:"
-	@echo "  codemode-example   Run the Codemode example"
-	@echo "  codemode-patterns  Run the Codemode patterns example"
+	@echo "  agent           Start the MCP agent CLI (stdio server)"
+	@echo "  agent-codemode  Start the Agent Codemode agent CLI (stdio server)"
+	@echo "  clean-codemode  Remove generated folder (two levels up)"
 
-codemode-example:
-	python codemode_example.py
+agent:
+	python agent_cli.py
 
-codemode-patterns:
-	python codemode_patterns_example.py
+agent-codemode:
+	python agent_cli.py --codemode
+
+clean-codemode:
+	rm -rf ../../generated
