@@ -29,7 +29,7 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
-from code_sandboxes import Sandbox, Execution, SandboxConfig
+from code_sandboxes import Sandbox, ExecutionResult, SandboxConfig
 
 from ..discovery.registry import ToolRegistry
 from ..discovery.codegen import PythonCodeGenerator
@@ -259,7 +259,7 @@ except ImportError:
         self,
         code: str,
         timeout: Optional[float] = None,
-    ) -> Execution:
+    ) -> ExecutionResult:
         """Execute code that may use generated tool bindings.
 
         The code can import from the generated modules and call tools
@@ -394,15 +394,16 @@ async def __user_code__():
                         namespace[key] = value
                 
                 # Create execution result with captured output
-                from code_sandboxes.models import Execution, Logs, OutputMessage
+                from code_sandboxes.models import ExecutionResult, Logs, OutputMessage
                 import time
                 
                 stdout_lines = stdout_buffer.getvalue().splitlines()
                 stderr_lines = stderr_buffer.getvalue().splitlines()
                 timestamp = time.time()
                 
-                result = Execution(
-                    error=None,
+                result = ExecutionResult(
+                    execution_ok=True,
+                    code_error=None,
                     results=[],
                     logs=Logs(
                         stdout=[OutputMessage(line=line, timestamp=timestamp, error=False) for line in stdout_lines],
@@ -441,7 +442,7 @@ async def __user_code__():
         self,
         skill_name: str,
         arguments: Optional[dict[str, Any]] = None,
-    ) -> Execution:
+    ) -> ExecutionResult:
         """Execute a saved skill.
 
         Args:

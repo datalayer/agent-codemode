@@ -412,21 +412,36 @@ if PYDANTIC_AI_AVAILABLE:
             timeout: float = 30.0,
         ) -> dict[str, Any]:
             """Execute Python code that composes tools."""
-            import sys
-            # print(f"\n[TOOLSET] _execute_code called, code length={len(code)}", file=sys.stderr, flush=True)
-            
             if self._executor is None:
                 return {"success": False, "error": "Executor not initialized"}
             
             try:
                 start_time = time.monotonic()
-                print(f"[TOOLSET] Calling executor.execute()...", file=sys.stderr, flush=True)
+                code_preview = (code or "")[:100]
+                logger.info("Codemode execute_code: calling executor.execute() code=%r", code_preview)
                 execution = await self._executor.execute(code, timeout=timeout)
-                print(f"[TOOLSET] executor.execute() returned - stdout: {execution.logs.stdout_text!r}, stderr: {execution.logs.stderr_text!r}, error: {execution.error}", file=sys.stderr, flush=True)
+                log_message = (
+                    "Codemode execute_code: executor.execute() returned - "
+                    f"stdout: {execution.logs.stdout_text!r}, "
+                    f"stderr: {execution.logs.stderr_text!r}, "
+                    f"execution_ok: {execution.execution_ok}, "
+                    f"code_error: {execution.code_error}"
+                )
+                if not execution.execution_ok:
+                    logger.error(log_message)
+                elif execution.code_error:
+                    logger.warning(log_message)
+                else:
+                    logger.info(log_message)
                 elapsed = time.monotonic() - start_time
                 
+                error_message = (
+                    execution.execution_error
+                    if not execution.execution_ok
+                    else str(execution.code_error) if execution.code_error else None
+                )
                 result = {
-                    "success": not execution.error,
+                    "success": execution.success,
                     "result": execution.text,
                     "results": [
                         {
@@ -440,7 +455,10 @@ if PYDANTIC_AI_AVAILABLE:
                     "stderr": execution.stderr,
                     "output": execution.stdout,
                     "execution_time": elapsed,
-                    "error": str(execution.error) if execution.error else None,
+                    "execution_ok": execution.execution_ok,
+                    "execution_error": execution.execution_error,
+                    "code_error": str(execution.code_error) if execution.code_error else None,
+                    "error": error_message,
                 }
                 return result
             except Exception as e:

@@ -28,7 +28,7 @@ async def __call_tool__(tool_name, arguments):
 
 print("__call_tool__ defined successfully")
 """)
-    print(f"Result 1 - Error: {result1.error}")
+    print(f"Result 1 - Error: {result1.code_error}")
     print(f"Result 1 - Stdout: {result1.stdout}")
     
     # Second: Use __call_tool__
@@ -38,7 +38,7 @@ result = await __call_tool__("test_tool", {"arg": "value"})
 print(f"Tool result: {result}")
 result
 """)
-    print(f"Result 2 - Error: {result2.error}")
+    print(f"Result 2 - Error: {result2.code_error}")
     print(f"Result 2 - Stdout: {result2.stdout}")
     print(f"Result 2 - Results: {result2.results}")
     

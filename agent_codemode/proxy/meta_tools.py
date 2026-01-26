@@ -256,13 +256,21 @@ class MetaToolProvider:
 
         try:
             result = await self.executor.execute(code, timeout=timeout)
+            error_message = (
+                result.execution_error
+                if not result.execution_ok
+                else str(result.code_error) if result.code_error else None
+            )
 
             return {
                 "success": result.success,
+                "execution_ok": result.execution_ok,
+                "execution_error": result.execution_error,
+                "code_error": str(result.code_error) if result.code_error else None,
                 "stdout": result.stdout,
                 "stderr": result.stderr,
                 "result": result.text,
-                "error": str(result.error) if result.error else None,
+                "error": error_message,
             }
         except Exception as e:
             return {

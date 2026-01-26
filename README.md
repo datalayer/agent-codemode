@@ -165,6 +165,9 @@ print(execution.stdout)
 print(execution.stderr)
 print(execution.text)
 print(execution.success)
+print(execution.execution_ok)
+print(execution.execution_error)
+print(execution.code_error)
 ```
 
 ### 🧰 Skills (Reusable Compositions)

@@ -311,12 +311,20 @@ async def handle_execute_code(arguments: dict[str, Any]) -> dict[str, Any]:
     
     try:
         execution = await executor.execute(code, timeout=timeout)
+        error_message = (
+            execution.execution_error
+            if not execution.execution_ok
+            else str(execution.code_error) if execution.code_error else None
+        )
         
         return {
-            "success": not execution.error,
+            "success": execution.success,
+            "execution_ok": execution.execution_ok,
+            "execution_error": execution.execution_error,
+            "code_error": str(execution.code_error) if execution.code_error else None,
             "stdout": execution.stdout,
             "stderr": execution.stderr,
-            "error": str(execution.error) if execution.error else None,
+            "error": error_message,
         }
     except Exception as e:
         logger.error("Code execution failed", exc_info=e)
@@ -396,14 +404,22 @@ async def handle_run_skill(arguments: dict[str, Any]) -> dict[str, Any]:
     
     try:
         execution = await executor.execute_skill(name, skill_arguments)
+        error_message = (
+            execution.execution_error
+            if not execution.execution_ok
+            else str(execution.code_error) if execution.code_error else None
+        )
         
         return {
-            "success": not execution.error,
+            "success": execution.success,
+            "execution_ok": execution.execution_ok,
+            "execution_error": execution.execution_error,
+            "code_error": str(execution.code_error) if execution.code_error else None,
             "result": execution.text,
             "stdout": execution.stdout,
             "stderr": execution.stderr,
             "output": execution.stdout,
-            "error": str(execution.error) if execution.error else None,
+            "error": error_message,
         }
     except Exception as e:
         return {

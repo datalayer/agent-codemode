@@ -6,7 +6,7 @@ SHELL=/bin/bash
 
 .DEFAULT_GOAL := default
 
-.PHONY: clean build
+.PHONY: clean build test
 
 VERSION = "0.0.3"
 
