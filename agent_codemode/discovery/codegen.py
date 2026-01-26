@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 from typing import Any
 
-from ..models import ToolDefinition
+from ..types import ToolDefinition
 
 
 class PythonCodeGenerator:

@@ -11,7 +11,7 @@ across multiple MCP servers.
 import logging
 from typing import Optional
 
-from ..models import MCPServerConfig, SearchResult, ServerInfo, ToolDefinition
+from ..types import MCPServerConfig, SearchResult, ServerInfo, ToolDefinition
 from ..proxy.mcp_client import MCPClient
 
 logger = logging.getLogger(__name__)

@@ -31,7 +31,7 @@ Example:
 from .composition.executor import CodeModeExecutor
 from .discovery.codegen import PythonCodeGenerator
 from .discovery.registry import ToolRegistry
-from .models import (
+from .types import (
     CodeModeConfig,
     MCPServerConfig,
     SearchResult,

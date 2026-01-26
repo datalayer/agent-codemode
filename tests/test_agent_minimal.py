@@ -9,7 +9,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent))
 
 from agent_codemode import CodeModeExecutor, ToolRegistry
-from agent_codemode.models import MCPServerConfig, CodeModeConfig
+from agent_codemode.types import MCPServerConfig, CodeModeConfig
 
 async def main():
     print("=== Testing CodeModeExecutor with fixed sandbox ===\n")

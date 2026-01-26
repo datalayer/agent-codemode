@@ -31,7 +31,7 @@ from code_sandboxes import Sandbox, ExecutionResult, SandboxConfig
 
 from ..discovery.registry import ToolRegistry
 from ..discovery.codegen import PythonCodeGenerator
-from ..models import CodeModeConfig, ToolCallResult
+from ..types import CodeModeConfig, ToolCallResult
 
 
 def _get_identity_env() -> dict[str, str]:

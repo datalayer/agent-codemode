@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from agent_codemode import CodemodeToolset, CodeModeConfig
-from agent_codemode.models import ToolDefinition, SearchResult
+from agent_codemode.types import ToolDefinition, SearchResult
 
 from agent_skills.helpers import (
     wait_for,

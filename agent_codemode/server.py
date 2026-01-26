@@ -29,7 +29,7 @@ from mcp.server.lowlevel import Server
 
 from .composition.executor import CodeModeExecutor
 from .discovery.registry import ToolRegistry
-from .models import CodeModeConfig
+from .types import CodeModeConfig
 
 logger = logging.getLogger(__name__)
 

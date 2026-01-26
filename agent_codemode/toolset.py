@@ -37,7 +37,6 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional
 
 # Lazy imports to avoid circular dependencies
@@ -46,7 +45,7 @@ if TYPE_CHECKING:
     from .discovery.registry import ToolRegistry
     from .composition.executor import CodeModeExecutor
 
-from .models import CodeModeConfig
+from .types import CodeModeConfig
 
 logger = logging.getLogger(__name__)
 

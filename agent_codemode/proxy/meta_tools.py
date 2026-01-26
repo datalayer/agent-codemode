@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from ..discovery.registry import ToolRegistry
     from ..composition.executor import CodeModeExecutor
 
-from ..models import ToolDefinition
+from ..types import ToolDefinition
 
 logger = logging.getLogger(__name__)
 

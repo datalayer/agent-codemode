@@ -2,17 +2,19 @@
 #
 # BSD 3-Clause License
 
-"""Models for Agent Codemode.
+"""Types for Agent Codemode.
 
 These models define tool definitions and execution contexts.
 """
 
-from dataclasses import dataclass, field
+from __future__ import annotations
+
 from typing import Any, Optional
 
+from pydantic import BaseModel, ConfigDict, Field
 
-@dataclass
-class ToolParameter:
+
+class ToolParameter(BaseModel):
     """A parameter for an MCP tool.
 
     Attributes:
@@ -24,6 +26,8 @@ class ToolParameter:
         enum: List of allowed values (for enum types).
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     type: str
     description: str = ""
@@ -32,8 +36,7 @@ class ToolParameter:
     enum: Optional[list[Any]] = None
 
 
-@dataclass
-class ToolDefinition:
+class ToolDefinition(BaseModel):
     """Definition of an MCP tool.
 
     Attributes:
@@ -47,11 +50,13 @@ class ToolDefinition:
         server_url: URL of the MCP server.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     description: str
-    input_schema: dict[str, Any] = field(default_factory=dict)
+    input_schema: dict[str, Any] = Field(default_factory=dict)
     output_schema: Optional[dict[str, Any]] = None
-    input_examples: list[dict[str, Any]] = field(default_factory=list)
+    input_examples: list[dict[str, Any]] = Field(default_factory=list)
     defer_loading: bool = False
     server_name: str = ""
     server_url: str = ""
@@ -59,7 +64,7 @@ class ToolDefinition:
     @property
     def parameters(self) -> list[ToolParameter]:
         """Extract parameters from input schema."""
-        params = []
+        params: list[ToolParameter] = []
         properties = self.input_schema.get("properties", {})
         required = self.input_schema.get("required", [])
 
@@ -85,8 +90,7 @@ class ToolDefinition:
         return f"ToolDefinition(name={self.name!r}, server={self.server_name!r})"
 
 
-@dataclass
-class ToolCallResult:
+class ToolCallResult(BaseModel):
     """Result of a tool call.
 
     Attributes:
@@ -96,6 +100,8 @@ class ToolCallResult:
         error: Error message (if failed).
         execution_time: Time taken in seconds.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     tool_name: str
     success: bool
@@ -108,8 +114,7 @@ class ToolCallResult:
         return f"ToolCallResult({self.tool_name}, {status})"
 
 
-@dataclass
-class ServerInfo:
+class ServerInfo(BaseModel):
     """Information about an MCP server.
 
     Attributes:
@@ -119,6 +124,8 @@ class ServerInfo:
         url: Server URL (if HTTP-based).
         status: Connection status (connected, disconnected, etc.).
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str
     description: str = ""
@@ -130,8 +137,7 @@ class ServerInfo:
         return f"ServerInfo(name={self.name!r}, tools={self.tool_count})"
 
 
-@dataclass
-class MCPServerConfig:
+class MCPServerConfig(BaseModel):
     """Configuration for an MCP server.
 
     Attributes:
@@ -143,11 +149,13 @@ class MCPServerConfig:
         enabled: Whether the server is enabled.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     url: str = ""
     command: str = ""
-    args: list[str] = field(default_factory=list)
-    env: dict[str, str] = field(default_factory=dict)
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
     enabled: bool = True
 
     @property
@@ -161,8 +169,7 @@ class MCPServerConfig:
         return bool(self.url) and not self.command
 
 
-@dataclass
-class CodeModeConfig:
+class CodeModeConfig(BaseModel):
     """Configuration for the CodeMode executor.
 
     Attributes:
@@ -175,6 +182,8 @@ class CodeModeConfig:
         max_tool_calls: Optional safety cap for tool calls per execute() run.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     workspace_path: str = "./workspace"
     skills_path: str = "./skills"
     generated_path: str = "./generated"
@@ -184,8 +193,7 @@ class CodeModeConfig:
     max_tool_calls: int | None = None
 
 
-@dataclass
-class SearchResult:
+class SearchResult(BaseModel):
     """Result of a tool search.
 
     Attributes:
@@ -193,6 +201,8 @@ class SearchResult:
         total: Total number of matches.
         query: The search query used.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     tools: list[ToolDefinition]
     total: int
