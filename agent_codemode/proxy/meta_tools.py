@@ -259,7 +259,11 @@ class MetaToolProvider:
             error_message = (
                 result.execution_error
                 if not result.execution_ok
-                else str(result.code_error) if result.code_error else None
+                else f"Process exited with code: {result.exit_code}"
+                if result.exit_code not in (None, 0)
+                else str(result.code_error)
+                if result.code_error
+                else None
             )
 
             return {
@@ -267,6 +271,7 @@ class MetaToolProvider:
                 "execution_ok": result.execution_ok,
                 "execution_error": result.execution_error,
                 "code_error": str(result.code_error) if result.code_error else None,
+                "exit_code": result.exit_code,
                 "stdout": result.stdout,
                 "stderr": result.stderr,
                 "result": result.text,

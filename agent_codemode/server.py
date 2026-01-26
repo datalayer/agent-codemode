@@ -21,7 +21,6 @@ Based on:
 
 import json
 import logging
-from pathlib import Path
 from typing import Any, Optional
 
 import anyio
@@ -30,7 +29,7 @@ from mcp.server.lowlevel import Server
 
 from .composition.executor import CodeModeExecutor
 from .discovery.registry import ToolRegistry
-from .models import CodeModeConfig, SearchResult
+from .models import CodeModeConfig
 
 logger = logging.getLogger(__name__)
 
@@ -314,7 +313,11 @@ async def handle_execute_code(arguments: dict[str, Any]) -> dict[str, Any]:
         error_message = (
             execution.execution_error
             if not execution.execution_ok
-            else str(execution.code_error) if execution.code_error else None
+            else f"Process exited with code: {execution.exit_code}"
+            if execution.exit_code not in (None, 0)
+            else str(execution.code_error)
+            if execution.code_error
+            else None
         )
         
         return {
@@ -322,6 +325,7 @@ async def handle_execute_code(arguments: dict[str, Any]) -> dict[str, Any]:
             "execution_ok": execution.execution_ok,
             "execution_error": execution.execution_error,
             "code_error": str(execution.code_error) if execution.code_error else None,
+            "exit_code": execution.exit_code,
             "stdout": execution.stdout,
             "stderr": execution.stderr,
             "error": error_message,
@@ -407,7 +411,11 @@ async def handle_run_skill(arguments: dict[str, Any]) -> dict[str, Any]:
         error_message = (
             execution.execution_error
             if not execution.execution_ok
-            else str(execution.code_error) if execution.code_error else None
+            else f"Process exited with code: {execution.exit_code}"
+            if execution.exit_code not in (None, 0)
+            else str(execution.code_error)
+            if execution.code_error
+            else None
         )
         
         return {
@@ -415,6 +423,7 @@ async def handle_run_skill(arguments: dict[str, Any]) -> dict[str, Any]:
             "execution_ok": execution.execution_ok,
             "execution_error": execution.execution_error,
             "code_error": str(execution.code_error) if execution.code_error else None,
+            "exit_code": execution.exit_code,
             "result": execution.text,
             "stdout": execution.stdout,
             "stderr": execution.stderr,

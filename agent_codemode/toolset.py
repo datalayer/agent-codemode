@@ -425,10 +425,13 @@ if PYDANTIC_AI_AVAILABLE:
                     f"stdout: {execution.logs.stdout_text!r}, "
                     f"stderr: {execution.logs.stderr_text!r}, "
                     f"execution_ok: {execution.execution_ok}, "
-                    f"code_error: {execution.code_error}"
+                    f"code_error: {execution.code_error}, "
+                    f"exit_code: {execution.exit_code}"
                 )
                 if not execution.execution_ok:
                     logger.error(log_message)
+                elif execution.exit_code not in (None, 0):
+                    logger.warning(log_message)
                 elif execution.code_error:
                     logger.warning(log_message)
                 else:
@@ -438,7 +441,11 @@ if PYDANTIC_AI_AVAILABLE:
                 error_message = (
                     execution.execution_error
                     if not execution.execution_ok
-                    else str(execution.code_error) if execution.code_error else None
+                    else f"Process exited with code: {execution.exit_code}"
+                    if execution.exit_code not in (None, 0)
+                    else str(execution.code_error)
+                    if execution.code_error
+                    else None
                 )
                 result = {
                     "success": execution.success,
@@ -458,6 +465,7 @@ if PYDANTIC_AI_AVAILABLE:
                     "execution_ok": execution.execution_ok,
                     "execution_error": execution.execution_error,
                     "code_error": str(execution.code_error) if execution.code_error else None,
+                    "exit_code": execution.exit_code,
                     "error": error_message,
                 }
                 return result

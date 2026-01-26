@@ -23,8 +23,6 @@ Identity Context Support:
     APIs without explicitly passing credentials.
 """
 
-import asyncio
-import sys
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -379,10 +377,21 @@ async def __user_code__():
                 stdout_buffer = io.StringIO()
                 stderr_buffer = io.StringIO()
                 
+                exit_code = None
+
                 # Call the async function directly (we're already in async context)
                 with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
                     coro = namespace["__user_code__"]()
-                    locals_value = await coro
+                    try:
+                        locals_value = await coro
+                    except SystemExit as exc:
+                        if isinstance(exc.code, int):
+                            exit_code = exc.code
+                        elif exc.code:
+                            exit_code = 1
+                        else:
+                            exit_code = 0
+                        locals_value = {}
                 
                 # Update namespace with returned locals
                 if isinstance(locals_value, dict):
@@ -404,6 +413,7 @@ async def __user_code__():
                 result = ExecutionResult(
                     execution_ok=True,
                     code_error=None,
+                    exit_code=exit_code,
                     results=[],
                     logs=Logs(
                         stdout=[OutputMessage(line=line, timestamp=timestamp, error=False) for line in stdout_lines],
