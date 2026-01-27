@@ -455,12 +455,12 @@ def main() -> None:
             "billable_tokens": 0.0,
             "codemode_tool_calls": 0.0,
             "mcp_tool_calls": 0.0,
-            "skills_tool_calls": 0.0,
+            "skills_calls": 0.0,
         }
         previous_counts: dict[str, int] = {
             "codemode_tool_calls": 0,
             "mcp_tool_calls": 0,
-            "skills_tool_calls": 0,
+            "skills_calls": 0,
         }
 
         if codemode_toolset:
@@ -584,13 +584,13 @@ def main() -> None:
                     if hasattr(skills_toolset, "get_call_counts"):
                         skills_counts = skills_toolset.get_call_counts()  # type: ignore[assignment]
                     if skills_counts:
-                        prompt_usage_payload["skills_tool_calls"] = (
-                            skills_counts.get("skills_tool_calls", 0) - previous_counts["skills_tool_calls"]
+                        prompt_usage_payload["skills_calls"] = (
+                            skills_counts.get("skills_calls", 0) - previous_counts["skills_calls"]
                         )
-                        previous_counts["skills_tool_calls"] = skills_counts.get("skills_tool_calls", 0)
-                        session_usage["skills_tool_calls"] += float(prompt_usage_payload["skills_tool_calls"])
+                        previous_counts["skills_calls"] = skills_counts.get("skills_calls", 0)
+                        session_usage["skills_calls"] += float(prompt_usage_payload["skills_calls"])
                 else:
-                    prompt_usage_payload["skills_tool_calls"] = "N/A"
+                    prompt_usage_payload["skills_calls"] = "N/A"
 
                 if not codemode:
                     if "tool_calls" in prompt_usage_payload and "mcp_tool_calls" not in prompt_usage_payload:
@@ -624,7 +624,7 @@ def main() -> None:
                     "output_audio_tokens",
                     "mcp_tool_calls",
                     "codemode_tool_calls",
-                    "skills_tool_calls",
+                    "skills_calls",
                 ]
 
                 print(reply)
@@ -636,7 +636,7 @@ def main() -> None:
                     if not codemode:
                         session_usage_payload["codemode_tool_calls"] = "N/A"
                     if skills_toolset is None:
-                        session_usage_payload["skills_tool_calls"] = "N/A"
+                        session_usage_payload["skills_calls"] = "N/A"
                     console.print(
                         _usage_to_table(prompt_usage_payload, session_usage_payload, prompt_usage_keys)
                     )
