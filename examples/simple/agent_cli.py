@@ -314,7 +314,7 @@ async def _list_available_tools(
     return tools
 
 
-def create_agent(model: str, codemode: bool) -> tuple[Agent, object | None]:
+def create_agent(model: str, codemode: bool) -> tuple[Agent, object | None, object | None]:
     if not HAS_PYDANTIC_AI:
         print("❌ Error: pydantic-ai not installed")
         print("   Install with: pip install 'pydantic-ai[mcp]'\n")
@@ -346,6 +346,7 @@ def create_agent(model: str, codemode: bool) -> tuple[Agent, object | None]:
 
         # Create shared sandbox for both CodemodeToolset and DatalayerSkillsToolset
         shared_sandbox = None
+        skills_toolset = None
         if HAS_AGENT_SKILLS:
             shared_sandbox = LocalEvalSandbox()
             logger.info("Created shared LocalEvalSandbox for codemode and skills toolsets")
@@ -376,6 +377,7 @@ def create_agent(model: str, codemode: bool) -> tuple[Agent, object | None]:
         )
         toolsets = [mcp_server]
         toolset = None
+        skills_toolset = None
 
     # Skip upfront tool discovery to avoid anyio cancel-scope issues.
     # Tool hints are omitted; toolset will discover tools lazily on first use.
@@ -399,7 +401,7 @@ def create_agent(model: str, codemode: bool) -> tuple[Agent, object | None]:
 
     agent = Agent(**agent_kwargs)
 
-    return agent, toolset
+    return agent, toolset, skills_toolset
 
 
 def main() -> None:
@@ -446,7 +448,7 @@ def main() -> None:
     # print("  /cp        - Copy last response to clipboard")
     # print("\n" + "=" * 72 + "\n")
 
-    agent, codemode_toolset = create_agent(model=model, codemode=codemode)
+    agent, codemode_toolset, skills_toolset = create_agent(model=model, codemode=codemode)
 
     async def _run_cli() -> None:
         prompt = "𝄃𝄂𝄂𝄀𝄁𝄃𝄂𝄂𝄃 agent-codemode-agent ➤ " if codemode else "mcp-agent ➤ "
@@ -461,10 +463,12 @@ def main() -> None:
             "billable_tokens": 0.0,
             "codemode_tool_calls": 0.0,
             "mcp_tool_calls": 0.0,
+            "skills_tool_calls": 0.0,
         }
         previous_counts: dict[str, int] = {
             "codemode_tool_calls": 0,
             "mcp_tool_calls": 0,
+            "skills_tool_calls": 0,
         }
 
         if codemode_toolset:
@@ -582,6 +586,22 @@ def main() -> None:
                         session_usage["codemode_tool_calls"] += float(prompt_usage_payload["codemode_tool_calls"])
                         session_usage["mcp_tool_calls"] += float(prompt_usage_payload["mcp_tool_calls"])
 
+                # Track skills tool calls separately
+                if codemode and skills_toolset is not None:
+                    skills_counts = {}
+                    if hasattr(skills_toolset, "get_call_counts"):
+                        skills_counts = skills_toolset.get_call_counts()  # type: ignore[assignment]
+                    if skills_counts:
+                        prompt_usage_payload["skills_tool_calls"] = (
+                            skills_counts.get("skills_tool_calls", 0) - previous_counts["skills_tool_calls"]
+                        )
+                        previous_counts["skills_tool_calls"] = skills_counts.get("skills_tool_calls", 0)
+                        session_usage["skills_tool_calls"] += float(prompt_usage_payload["skills_tool_calls"])
+                    else:
+                        prompt_usage_payload["skills_tool_calls"] = 0
+                elif codemode:
+                    prompt_usage_payload["skills_tool_calls"] = "N/A"
+
                 if not codemode:
                     if "tool_calls" in prompt_usage_payload and "mcp_tool_calls" not in prompt_usage_payload:
                         prompt_usage_payload["mcp_tool_calls"] = prompt_usage_payload["tool_calls"]
@@ -589,6 +609,7 @@ def main() -> None:
                         prompt_usage_payload.pop("tool_calls", None)
                     prompt_usage_payload.setdefault("mcp_tool_calls", 0)
                     prompt_usage_payload["codemode_tool_calls"] = "N/A"
+                    prompt_usage_payload["skills_tool_calls"] = "N/A"
                     if "tool_calls" in usage_data and isinstance(usage_data["tool_calls"], (int, float)):
                         session_usage["mcp_tool_calls"] += float(usage_data["tool_calls"])
                     elif "tool_calls" in usage_data:
@@ -614,6 +635,7 @@ def main() -> None:
                     "output_audio_tokens",
                     "mcp_tool_calls",
                     "codemode_tool_calls",
+                    "skills_tool_calls",
                 ]
 
                 print(reply)
@@ -624,6 +646,9 @@ def main() -> None:
                     session_usage_payload = dict(session_usage)
                     if not codemode:
                         session_usage_payload["codemode_tool_calls"] = "N/A"
+                        session_usage_payload["skills_tool_calls"] = "N/A"
+                    elif skills_toolset is None:
+                        session_usage_payload["skills_tool_calls"] = "N/A"
                     console.print(
                         _usage_to_table(prompt_usage_payload, session_usage_payload, prompt_usage_keys)
                     )
