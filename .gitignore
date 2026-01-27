@@ -133,3 +133,4 @@ launcher.py
 
 !docs/docs/skills
 !examples/**/skills
+!skills

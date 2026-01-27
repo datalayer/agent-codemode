@@ -31,6 +31,13 @@ try:
 except ImportError:
     HAS_RICH = False
 
+try:
+    from agent_skills import DatalayerSkillsToolset, SandboxExecutor
+    from code_sandboxes import LocalEvalSandbox
+    HAS_AGENT_SKILLS = True
+except ImportError:
+    HAS_AGENT_SKILLS = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -103,10 +110,19 @@ def _build_system_prompt(
         "4. **call_tool** - Direct single-tool invocation",
         "   Use this for simple, single-tool operations.",
         "",
+        "## Skills Tools (if available)",
+        "You may also have access to skills tools for reusable agent capabilities:",
+        "",
+        "- **list_skills** - List all available skills with descriptions",
+        "- **load_skill** - Load the full content and instructions for a skill",
+        "- **read_skill_resource** - Read a specific resource from a skill",
+        "- **run_skill_script** - Execute a skill script with arguments",
+        "",
         "## Recommended Workflow",
         "1. **Discover**: Use search_tools to find relevant tools",
         "2. **Understand**: Use get_tool_details to check parameters",
         "3. **Execute**: Use call_tool for simple ops OR execute_code for complex workflows",
+        "4. **Skills**: Use list_skills and load_skill to leverage reusable skills",
         "",
     ]
     return "\n".join(lines)
@@ -328,12 +344,30 @@ def create_agent(model: str, codemode: bool) -> tuple[Agent, object | None]:
             allow_direct_tool_calls=False,
         )
 
+        # Create shared sandbox for both CodemodeToolset and DatalayerSkillsToolset
+        shared_sandbox = None
+        if HAS_AGENT_SKILLS:
+            shared_sandbox = LocalEvalSandbox()
+            logger.info("Created shared LocalEvalSandbox for codemode and skills toolsets")
+
         toolset = CodemodeToolset(
             registry=registry,
             config=config,
+            sandbox=shared_sandbox,
             allow_discovery_tools=True,  # Enable discovery tools (search_tools, get_tool_details, list_tool_names, list_servers)
         )
         toolsets = [toolset]
+
+        # Add DatalayerSkillsToolset if available (using the same shared sandbox)
+        if HAS_AGENT_SKILLS:
+            skills_toolset = DatalayerSkillsToolset(
+                directories=[str((repo_root / "skills").resolve())],
+                executor=SandboxExecutor(shared_sandbox),
+            )
+            toolsets.append(skills_toolset)
+            logger.info("Added DatalayerSkillsToolset with skills from %s", (repo_root / "skills").resolve())
+        else:
+            logger.debug("agent_skills not available, skipping DatalayerSkillsToolset")
     else:
         mcp_server = MCPServerStdio(
             sys.executable,
