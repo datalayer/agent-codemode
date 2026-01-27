@@ -32,7 +32,7 @@ except ImportError:
     HAS_RICH = False
 
 try:
-    from agent_skills import DatalayerSkillsToolset, SandboxExecutor
+    from agent_skills import AgentSkillsToolset, SandboxExecutor
     from code_sandboxes import LocalEvalSandbox
     HAS_AGENT_SKILLS = True
 except ImportError:
@@ -344,7 +344,7 @@ def create_agent(model: str, codemode: bool) -> tuple[Agent, object | None, obje
             allow_direct_tool_calls=False,
         )
 
-        # Create shared sandbox for both CodemodeToolset and DatalayerSkillsToolset
+        # Create shared sandbox for both CodemodeToolset and AgentSkillsToolset
         shared_sandbox = None
         skills_toolset = None
         if HAS_AGENT_SKILLS:
@@ -359,16 +359,16 @@ def create_agent(model: str, codemode: bool) -> tuple[Agent, object | None, obje
         )
         toolsets = [toolset]
 
-        # Add DatalayerSkillsToolset if available (using the same shared sandbox)
+        # Add AgentSkillsToolset if available (using the same shared sandbox)
         if HAS_AGENT_SKILLS:
-            skills_toolset = DatalayerSkillsToolset(
+            skills_toolset = AgentSkillsToolset(
                 directories=[str((repo_root / "skills").resolve())],
                 executor=SandboxExecutor(shared_sandbox),
             )
             toolsets.append(skills_toolset)
-            logger.info("Added DatalayerSkillsToolset with skills from %s", (repo_root / "skills").resolve())
+            logger.info("Added AgentSkillsToolset with skills from %s", (repo_root / "skills").resolve())
         else:
-            logger.debug("agent_skills not available, skipping DatalayerSkillsToolset")
+            logger.debug("agent_skills not available, skipping AgentSkillsToolset")
     else:
         mcp_server = MCPServerStdio(
             sys.executable,

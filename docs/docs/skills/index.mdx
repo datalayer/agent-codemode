@@ -310,16 +310,16 @@ codemode_server.run()
 
 ## Pydantic AI Integration
 
-For Pydantic AI agents, use the `DatalayerSkillsToolset`:
+For Pydantic AI agents, use the `AgentSkillsToolset`:
 
 ```python
 from pydantic_ai import Agent
-from agent_skills import DatalayerSkillsToolset, SandboxExecutor
+from agent_skills import AgentSkillsToolset, SandboxExecutor
 from code_sandboxes import LocalEvalSandbox
 
 # Create toolset with sandbox execution
 sandbox = LocalEvalSandbox()
-toolset = DatalayerSkillsToolset(
+toolset = AgentSkillsToolset(
     directories=["./skills"],
     executor=SandboxExecutor(sandbox),
 )

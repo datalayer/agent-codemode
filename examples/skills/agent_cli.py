@@ -328,7 +328,7 @@ def create_agent(model: str, codemode: bool) -> tuple[Agent, object | None, obje
 
     if codemode:
         from agent_codemode import CodemodeToolset, ToolRegistry, MCPServerConfig, CodeModeConfig
-        from agent_skills import DatalayerSkillsToolset
+        from agent_skills import AgentSkillsToolset
 
         registry = ToolRegistry()
         # Server name becomes the tool prefix (e.g., example_mcp__read_text_file)
@@ -356,7 +356,7 @@ def create_agent(model: str, codemode: bool) -> tuple[Agent, object | None, obje
         )
         
         # Add skills toolset for skill discovery and execution
-        skills_toolset = DatalayerSkillsToolset(
+        skills_toolset = AgentSkillsToolset(
             directories=[str(skills_dir.resolve())],
         )
         
