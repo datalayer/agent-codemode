@@ -222,13 +222,55 @@ async def call_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
 
         # Generate type hints from schema
         input_type = self._schema_to_type_hint(tool.input_schema)
-        output_type = "Any"  # Could be improved with output schema
+        output_type = self._schema_to_type_hint(tool.output_schema) if tool.output_schema else "Any"
 
         # Generate docstring
         docstring = self._generate_docstring(tool)
 
+        # Check if this tool has the pattern of tool_name + arguments parameters
+        needs_flexible_params = self._needs_flexible_parameters(tool.input_schema)
+
         # Generate the function
-        code = f'''# Auto-generated tool binding for {tool.name}
+        if needs_flexible_params:
+            # Extract the main parameter names from the schema
+            schema_props = tool.input_schema.get("properties", {}) if tool.input_schema else {}
+            param_names = list(schema_props.keys())
+            
+            # Build parameter list for flexible functions
+            param_list = []
+            for prop_name, prop_def in schema_props.items():
+                param_type = self._schema_property_to_type_hint(prop_def)
+                param_list.append(f"    {prop_name}: Optional[{param_type}] = None")
+            
+            param_signature = ",\n".join(param_list) + ",\n    **kwargs: Any" if param_list else "**kwargs: Any"
+            
+            # Generate flexible call logic
+            call_logic = self._generate_flexible_call_logic(param_names)
+            
+            code = f'''# Auto-generated tool binding for {tool.name}
+# Copyright (c) 2025-2026 Datalayer, Inc.
+# BSD 3-Clause License
+
+"""Tool: {tool.name}"""
+
+from typing import Any, Optional
+from ...client import call_tool
+
+
+async def {func_name}(
+{param_signature}
+) -> {output_type}:
+    """{docstring}"""
+{call_logic}
+    return await call_tool("{tool.name}", call_args)
+
+
+# Convenience alias
+{func_name}_sync = None  # Sync version can be added if needed
+'''
+        else:
+            # Standard function generation
+            code = f'''# Auto-generated tool binding for {tool.name}
 # Copyright (c) 2025-2026 Datalayer, Inc.
 # BSD 3-Clause License
 
@@ -435,6 +477,132 @@ __all__ = {server_names!r}
 
         lines.append("")
         lines.append("Returns:")
-        lines.append("    Tool execution result.")
+        if tool.output_schema:
+            lines.append("    Tool execution result with the following structure:")
+            self._add_schema_description(lines, tool.output_schema, "    ")
+        else:
+            lines.append("    Tool execution result.")
 
         return "\n    ".join(lines)
+    
+    def _add_schema_description(self, lines: list[str], schema: dict[str, Any], indent: str) -> None:
+        """Add schema description to docstring lines.
+        
+        Args:
+            lines: List of docstring lines to append to
+            schema: JSON Schema to describe
+            indent: Indentation prefix for schema lines
+        """
+        if not schema:
+            return
+            
+        schema_type = schema.get("type")
+        if schema_type == "object" and "properties" in schema:
+            lines.append(f"{indent}Object with properties:")
+            for prop_name, prop_def in schema["properties"].items():
+                prop_type = prop_def.get("type", "any")
+                prop_desc = prop_def.get("description", "")
+                req_marker = " (required)" if prop_name in schema.get("required", []) else ""
+                if prop_desc:
+                    lines.append(f"{indent}  - {prop_name}: {prop_type}{req_marker} - {prop_desc}")
+                else:
+                    lines.append(f"{indent}  - {prop_name}: {prop_type}{req_marker}")
+        elif schema_type == "array" and "items" in schema:
+            lines.append(f"{indent}Array of items:")
+            self._add_schema_description(lines, schema["items"], indent + "  ")
+        elif schema_type:
+            desc = schema.get("description", "")
+            if desc:
+                lines.append(f"{indent}{schema_type} - {desc}")
+            else:
+                lines.append(f"{indent}{schema_type}")
+
+    def _needs_flexible_parameters(self, schema: dict[str, Any]) -> bool:
+        """Check if a tool schema needs flexible parameter handling.
+        
+        Returns True if the schema has properties that suggest it needs
+        individual parameter handling (like tool_name + arguments pattern).
+        
+        Args:
+            schema: Tool input schema
+            
+        Returns:
+            True if flexible parameters are needed
+        """
+        if not schema or "properties" not in schema:
+            return False
+            
+        props = schema["properties"]
+        
+        # Check for common patterns that need flexible handling:
+        # 1. Has both "tool_name" and "arguments" 
+        # 2. Has "function_name" or "method_name" with "arguments"/"parameters"
+        # 3. Any combination that suggests nested tool calling
+        
+        has_tool_identifier = any(key in props for key in [
+            "tool_name", "function_name", "method_name", "action", "command"
+        ])
+        has_arguments = any(key in props for key in [
+            "arguments", "parameters", "args", "params", "input", "data"
+        ])
+        
+        return has_tool_identifier and has_arguments
+    
+    def _schema_property_to_type_hint(self, prop_def: dict[str, Any]) -> str:
+        """Convert a single JSON Schema property to Python type hint.
+        
+        Args:
+            prop_def: Property definition from JSON Schema
+            
+        Returns:
+            Python type hint string
+        """
+        prop_type = prop_def.get("type", "any")
+        
+        if prop_type == "string":
+            return "str"
+        elif prop_type == "number":
+            return "float"
+        elif prop_type == "integer":
+            return "int"
+        elif prop_type == "boolean":
+            return "bool"
+        elif prop_type == "array":
+            return "list[Any]"
+        elif prop_type == "object":
+            return "dict[str, Any]"
+        else:
+            return "Any"
+    
+    def _generate_flexible_call_logic(self, param_names: list[str]) -> str:
+        """Generate the call logic for flexible parameter functions.
+        
+        Args:
+            param_names: List of parameter names from schema
+            
+        Returns:
+            Indented Python code for parameter handling
+        """
+        lines = [
+            "    # Support both calling styles:",
+            "    # 1. Natural keyword arguments: func(param1=val1, param2=val2)",  
+            "    # 2. Single arguments dict: func(arguments={'param1': val1, 'param2': val2})",
+            "    ",
+            "    # Check if any schema parameters were provided directly",
+            f"    direct_params = {{k: v for k, v in locals().items() if k in {param_names!r} and v is not None}}",
+            "    ",
+            "    if direct_params:",
+            "        # Style 1: Direct parameters provided",
+            "        call_args = direct_params",
+            "        call_args.update(kwargs)",
+            "    elif 'arguments' in kwargs and isinstance(kwargs['arguments'], dict):",
+            "        # Style 2: Single arguments dict provided", 
+            "        call_args = kwargs['arguments'].copy()",
+            "        # Add any other kwargs that aren't 'arguments'",
+            "        call_args.update({k: v for k, v in kwargs.items() if k != 'arguments'})",
+            "    else:",
+            "        # Fallback: use kwargs as arguments",
+            "        call_args = kwargs",
+        ]
+        
+        return "\n".join(lines)

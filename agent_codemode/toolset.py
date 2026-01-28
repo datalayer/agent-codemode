@@ -418,8 +418,12 @@ if PYDANTIC_AI_AVAILABLE:
             
             try:
                 start_time = time.monotonic()
-                code_preview = (code or "")[:100]
-                logger.info("Codemode execute_code: calling executor.execute() code=%r", code_preview)
+                # Log full code for debugging (truncate only for single-line display)
+                code_lines = (code or "").strip().split('\n')
+                if len(code_lines) > 1:
+                    logger.info("Codemode execute_code: calling executor.execute() with %d lines:\n%s", len(code_lines), code)
+                else:
+                    logger.info("Codemode execute_code: calling executor.execute() code=%r", code)
                 execution = await self._executor.execute(code, timeout=timeout)
                 log_message = (
                     "Codemode execute_code: executor.execute() returned - "
