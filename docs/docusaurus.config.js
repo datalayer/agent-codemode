@@ -50,7 +50,7 @@ module.exports = {
         },
         {
           type: 'doc',
-          docId: 'mcp-tools/index',
+          docId: 'mcp-servers/index',
           position: 'left',
           label: 'MCP Tools',
         },
