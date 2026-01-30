@@ -5,7 +5,7 @@
 
 /** @type {import('@docusaurus/types').DocusaurusConfig} */
 module.exports = {
-  title: 'Ξ Agent Codemode',
+  title: '☰ Agent Codemode',
   tagline: 'Agent Codemode',
   url: 'https://agent-codemode.datalayer.tech',
   baseUrl: '/',
