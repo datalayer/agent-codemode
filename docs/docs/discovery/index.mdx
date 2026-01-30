@@ -1,14 +1,14 @@
 ---
-title: Tool Discovery
+title: Tools Discovery
 ---
 
-# Tool Discovery
+# Tools Discovery
 
-Agent Codemode provides progressive tool discovery to efficiently find relevant tools from the programmatic tools generated from [MCP Tools](../mcp-servers/index.mdx) and [Skills](../skills/index.mdx).
+Agent Codemode provides progressive tool discovery to efficiently find relevant tools from the programmatic tools generated from [MCP Servers](../mcp-servers/index.mdx) and [Skills](../skills/index.mdx).
 
-## Progressive Tool Discovery
+## Progressive Tools Discovery
 
-Progressive Tool Discovery means the agent does not load every tool definition upfront. Instead, it starts with a lightweight query (like `search_tools` or `list_tool_names`), then requests full schemas only for the small set of tools that are relevant to the current task. This reduces token usage, speeds startup, and keeps the model focused on a short list of candidates.
+Progressive Tools Discovery means the agent does not load every tool definition upfront. Instead, it starts with a lightweight query (like `search_tools` or `list_tool_names`), then requests full schemas only for the small set of tools that are relevant to the current task. This reduces token usage, speeds startup, and keeps the model focused on a short list of candidates.
 
 In practice, the flow is:
 

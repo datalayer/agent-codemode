@@ -52,7 +52,7 @@ module.exports = {
           type: 'doc',
           docId: 'mcp-servers/index',
           position: 'left',
-          label: 'MCP Tools',
+          label: 'MCP Servers',
         },
         {
           type: 'doc',
@@ -70,7 +70,7 @@ module.exports = {
           type: 'doc',
           docId: 'discovery/index',
           position: 'left',
-          label: 'Tool Discovery',
+          label: 'Tools Discovery',
         },
         {
           type: 'doc',

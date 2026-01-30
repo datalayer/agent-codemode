@@ -190,7 +190,7 @@ from generated.servers.filesystem import read_file, write_file
 content = await read_file({"path": "/workspace/data.txt"})
 ```
 
-See [MCP Tools](./mcp-servers/index.mdx) for complete documentation.
+See [MCP Servers](./mcp-servers/index.mdx) for complete documentation.
 
 ### 🎯 Generate from Skills
 
@@ -214,7 +214,7 @@ result = await batch_process("/data/input", "/data/output")
 
 See [Skills](./skills/index.mdx) for complete documentation.
 
-### 🔍 Progressive Tool Discovery
+### 🔍 Progressive Tools Discovery
 
 Large tool catalogs (100+ tools) are overwhelming for LLMs. The **Tool Search Tool** enables progressive discovery:
 
@@ -225,7 +225,7 @@ for tool in result["tools"]:
     print(f"{tool['name']}: {tool['description']}")
 ```
 
-See [Tool Discovery](./discovery/index.mdx) for complete documentation.
+See [Tools Discovery](./discovery/index.mdx) for complete documentation.
 
 ### 🔌 Use Directly or Expose as MCP Server
 
