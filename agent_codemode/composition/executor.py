@@ -107,6 +107,14 @@ class CodeModeExecutor:
         self._in_execute = False
         self._tool_calls_in_run = 0
 
+    def _is_local_eval_sandbox(self) -> bool:
+        """Check if the sandbox is a local-eval type (has in-memory namespaces).
+        
+        This checks the actual sandbox instance, not the config, to handle
+        cases where an external sandbox is passed that differs from config.
+        """
+        return self._sandbox is not None and hasattr(self._sandbox, '_namespaces')
+
     @property
     def sandbox(self) -> Optional[Sandbox]:
         """Get the sandbox instance."""
@@ -162,7 +170,9 @@ class CodeModeExecutor:
         skills_path = Path(self.config.skills_path).resolve()
 
         # For Jupyter/remote sandboxes, generate tools directly in the sandbox
-        if self.config.sandbox_variant in ("local-jupyter", "datalayer-runtime"):
+        # Use actual sandbox type detection, not config
+        is_local_eval = self._is_local_eval_sandbox()
+        if not is_local_eval:
             await self._generate_tools_in_sandbox()
             # Use /tmp so 'from generated.servers...' works (files are at /tmp/generated/)
             sandbox_generated_path = "/tmp"
@@ -226,7 +236,8 @@ except NameError:
         self._sandbox.run_code(verify_code)
 
         # For Jupyter/remote sandboxes, set up in-sandbox registry for tool calling
-        if self.config.sandbox_variant in ("local-jupyter", "datalayer-runtime"):
+        # Use actual sandbox type detection, not config
+        if not is_local_eval:
             # Serialize server configs for the sandbox
             server_configs = [
                 {
@@ -593,13 +604,6 @@ print(f"Generated tool bindings for {{len(__tools_data__)}} tools in {{__generat
         if not self._setup_done or self._sandbox is None:
             raise RuntimeError("Executor not set up. Call setup() first.")
 
-        import sys
-        print(f"\n[EXECUTOR.execute] Starting execute(), sandbox={id(self._sandbox)}", file=sys.stderr, flush=True)
-        
-        # Check namespace state immediately
-        namespace = self._sandbox._namespaces[self._sandbox._default_context.id]
-        print(f"[EXECUTOR.execute] __call_tool__ in namespace: {'__call_tool__' in namespace}", file=sys.stderr, flush=True)
-
         self._in_execute = True
         self._tool_calls_in_run = 0
 
@@ -610,7 +614,9 @@ print(f"Generated tool bindings for {{len(__tools_data__)}} tools in {{__generat
             # Get the generated path for sys.path setup
             # For remote sandboxes, use /tmp so 'from generated.servers...' works (files at /tmp/generated/)
             # For local-eval, use parent of generated_path so 'from generated.servers...' works
-            if self.config.sandbox_variant in ("local-jupyter", "datalayer-runtime"):
+            # Use actual sandbox type detection, not config
+            is_local_eval = self._is_local_eval_sandbox()
+            if not is_local_eval:
                 generated_path = "/tmp"
             else:
                 generated_path = str(Path(self.config.generated_path).resolve().parent)
@@ -659,105 +665,120 @@ try:
 except Exception:
     pass
 '''
-            # Run setup first - use exec() directly instead of run_code() to avoid async wrapping issues
-            import sys
+            # Branch based on actual sandbox type (already computed above)
+            if is_local_eval:
+                # For local-eval, we can access _namespaces directly
+                return await self._execute_local_eval(code, setup_code, timeout)
+            else:
+                # For Jupyter/remote sandboxes, use run_code()
+                return await self._execute_jupyter(code, setup_code, timeout)
+        finally:
+            self._in_execute = False
+    async def _execute_local_eval(
+        self,
+        code: str,
+        setup_code: str,
+        timeout: Optional[float] = None,
+    ) -> ExecutionResult:
+        """Execute code in local-eval sandbox with direct namespace access."""
+        import sys
+        import io
+        import time
+        from contextlib import redirect_stdout, redirect_stderr
+        from code_sandboxes.models import ExecutionResult, Logs, OutputMessage
+        
+        # Get the namespace directly
+        namespace = self._sandbox._namespaces[self._sandbox._default_context.id]
+        
+        # Execute setup_code directly in namespace (avoids async wrapper issues)
+        exec(setup_code, namespace, namespace)
+        
+        # Configure the generated.client tool caller if available
+        if '__call_tool__' in namespace:
+            try:
+                from generated.client import set_tool_caller
+                set_tool_caller(namespace['__call_tool__'])
+            except ImportError:
+                pass
+        
+        # For async code, we need to handle it specially to avoid event loop conflicts
+        if "await " in code or "async " in code:
+            # Wrap user code in async function
+            def _indent_code(value: str, spaces: int) -> str:
+                indent = " " * spaces
+                return "\n".join(indent + line for line in value.split("\n"))
             
-            # Get the namespace
-            namespace = self._sandbox._namespaces[self._sandbox._default_context.id]
-            print(f"[EXECUTE DEBUG] __call_tool__ in namespace: {'__call_tool__' in namespace}", file=sys.stderr, flush=True)
-            
-            # Execute setup_code directly in namespace (avoids async wrapper issues)
-            exec(setup_code, namespace, namespace)
-            
-            # Now configure the generated.client tool caller directly
-            if '__call_tool__' in namespace:
-                try:
-                    from generated.client import set_tool_caller
-                    set_tool_caller(namespace['__call_tool__'])
-                    print(f"[EXECUTE DEBUG] set_tool_caller configured successfully", file=sys.stderr, flush=True)
-                except ImportError:
-                    pass
-            
-            # For async code, we need to handle it specially to avoid event loop conflicts
-            if "await " in code or "async " in code:
-                # Get the namespace and execute async code directly in current loop
-                namespace = self._sandbox._namespaces[self._sandbox._default_context.id]
-                
-                # Wrap user code in async function
-                def _indent_code(value: str, spaces: int) -> str:
-                    indent = " " * spaces
-                    return "\n".join(indent + line for line in value.split("\n"))
-                
-                async_wrapper = f"""
+            async_wrapper = f"""
 async def __user_code__():
 {_indent_code(code, 4)}
     return locals()
 """
-                # Execute the wrapper in namespace
-                exec(async_wrapper, namespace, namespace)
-                
-                # Capture stdout/stderr
-                import io
-                from contextlib import redirect_stdout, redirect_stderr
-                stdout_buffer = io.StringIO()
-                stderr_buffer = io.StringIO()
-                
-                exit_code = None
-
-                # Call the async function directly (we're already in async context)
-                with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
-                    coro = namespace["__user_code__"]()
-                    try:
-                        locals_value = await coro
-                    except SystemExit as exc:
-                        if isinstance(exc.code, int):
-                            exit_code = exc.code
-                        elif exc.code:
-                            exit_code = 1
-                        else:
-                            exit_code = 0
-                        locals_value = {}
-                
-                # Update namespace with returned locals
-                if isinstance(locals_value, dict):
-                    for key, value in locals_value.items():
-                        if key in ("__builtins__", "__name__", "__doc__", "__package__", 
-                                 "__loader__", "__spec__", "__annotations__", "__cached__",
-                                 "__file__"):
-                            continue
-                        namespace[key] = value
-                
-                # Create execution result with captured output
-                from code_sandboxes.models import ExecutionResult, Logs, OutputMessage
-                import time
-                
-                stdout_lines = stdout_buffer.getvalue().splitlines()
-                stderr_lines = stderr_buffer.getvalue().splitlines()
-                timestamp = time.time()
-                
-                result = ExecutionResult(
-                    execution_ok=True,
-                    code_error=None,
-                    exit_code=exit_code,
-                    results=[],
-                    logs=Logs(
-                        stdout=[OutputMessage(line=line, timestamp=timestamp, error=False) for line in stdout_lines],
-                        stderr=[OutputMessage(line=line, timestamp=timestamp, error=True) for line in stderr_lines],
-                    ),
-                    execution_count=self._sandbox._execution_count[self._sandbox._default_context.id],
-                    context_id=self._sandbox._default_context.id,
-                )
-                
-                # print("[EXECUTOR DEBUG] Async code completed", file=sys.stderr, flush=True)
-            else:
-                # Then run user code (sandbox will handle sync code properly)
-                # print(f"[EXECUTOR DEBUG] Starting sync code execution (length={len(code)})...", file=sys.stderr, flush=True)
-                result = self._sandbox.run_code(code, timeout=timeout)
-                # print("[EXECUTOR DEBUG] Sync code completed", file=sys.stderr, flush=True)
+            # Execute the wrapper in namespace
+            exec(async_wrapper, namespace, namespace)
             
-            return result
-        finally:
-            self._in_execute = False
+            # Capture stdout/stderr
+            stdout_buffer = io.StringIO()
+            stderr_buffer = io.StringIO()
+            
+            exit_code = None
+
+            # Call the async function directly (we're already in async context)
+            with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
+                coro = namespace["__user_code__"]()
+                try:
+                    locals_value = await coro
+                except SystemExit as exc:
+                    if isinstance(exc.code, int):
+                        exit_code = exc.code
+                    elif exc.code:
+                        exit_code = 1
+                    else:
+                        exit_code = 0
+                    locals_value = {}
+            
+            # Update namespace with returned locals
+            if isinstance(locals_value, dict):
+                for key, value in locals_value.items():
+                    if key in ("__builtins__", "__name__", "__doc__", "__package__", 
+                             "__loader__", "__spec__", "__annotations__", "__cached__",
+                             "__file__"):
+                        continue
+                    namespace[key] = value
+            
+            stdout_lines = stdout_buffer.getvalue().splitlines()
+            stderr_lines = stderr_buffer.getvalue().splitlines()
+            timestamp = time.time()
+            
+            result = ExecutionResult(
+                execution_ok=True,
+                code_error=None,
+                exit_code=exit_code,
+                results=[],
+                logs=Logs(
+                    stdout=[OutputMessage(line=line, timestamp=timestamp, error=False) for line in stdout_lines],
+                    stderr=[OutputMessage(line=line, timestamp=timestamp, error=True) for line in stderr_lines],
+                ),
+                execution_count=self._sandbox._execution_count[self._sandbox._default_context.id],
+                context_id=self._sandbox._default_context.id,
+            )
+        else:
+            # For sync code, use sandbox's run_code
+            result = self._sandbox.run_code(code, timeout=timeout)
+        
+        return result
+
+    async def _execute_jupyter(
+        self,
+        code: str,
+        setup_code: str,
+        timeout: Optional[float] = None,
+    ) -> ExecutionResult:
+        """Execute code in Jupyter/remote sandbox using run_code()."""
+        # Run setup code first
+        self._sandbox.run_code(setup_code, timeout=timeout)
+        
+        # Then run user code
+        return self._sandbox.run_code(code, timeout=timeout)
 
     def _indent_code(self, code: str, spaces: int) -> str:
         """Indent code by a number of spaces.
