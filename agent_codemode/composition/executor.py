@@ -23,6 +23,7 @@ Identity Context Support:
     APIs without explicitly passing credentials.
 """
 
+import logging
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -32,6 +33,8 @@ from code_sandboxes import Sandbox, ExecutionResult, SandboxConfig
 from ..discovery.registry import ToolRegistry
 from ..discovery.codegen import PythonCodeGenerator
 from ..types import CodeModeConfig, ToolCallResult
+
+logger = logging.getLogger(__name__)
 
 
 def _get_identity_env() -> dict[str, str]:
