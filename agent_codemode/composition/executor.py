@@ -153,11 +153,15 @@ class CodeModeExecutor:
             return
 
         generated_path = Path(self.config.generated_path).resolve()
+        skills_path = Path(self.config.skills_path).resolve()
 
-        # Add generated path to sys.path and clear any stale module cache
+        # Add generated path and skills path to sys.path and clear any stale module cache
         setup_code = f'''
 import sys
 generated_path = {str(generated_path)!r}
+skills_path = {str(skills_path)!r}
+
+# Add generated path to sys.path
 if generated_path not in sys.path:
     sys.path.insert(0, str(generated_path))
     # Clear any stale generated module cache
@@ -182,12 +186,25 @@ if generated_path not in sys.path:
             __generated_spec__.loader.exec_module(__generated_module__)
     except Exception:
         pass
+
+# Add skills path to sys.path (for skills imports)
+if skills_path not in sys.path:
+    sys.path.insert(0, str(skills_path))
 '''
         self._sandbox.run_code(setup_code)
 
-        # Set up the tool caller
-        self._sandbox.set_variable("__tool_registry__", self.registry)
-        self._sandbox.set_variable("__executor__", self)
+        # Set up the tool caller - may fail for sandboxes that can't pickle asyncio objects
+        try:
+            self._sandbox.set_variable("__tool_registry__", self.registry)
+            self._sandbox.set_variable("__executor__", self)
+        except (ValueError, RuntimeError) as e:
+            # Serialization failed - objects contain non-picklable types (asyncio, etc.)
+            # This is expected for Jupyter sandboxes with MCP clients that use asyncio
+            logger.warning(
+                f"Cannot set registry/executor variables in sandbox: {e}. "
+                f"Tool calling from generated code will not be available."
+            )
+            return
 
         # Inject the tool caller function
         caller_code = '''
