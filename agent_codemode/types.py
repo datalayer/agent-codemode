@@ -180,6 +180,16 @@ class CodeModeConfig(BaseModel):
         sandbox_image: Optional sandbox image (for Docker-based sandboxes).
         allow_direct_tool_calls: Whether to expose call_tool in the toolset.
         max_tool_calls: Optional safety cap for tool calls per execute() run.
+        mcp_proxy_url: URL for the MCP tool proxy endpoint.
+            When set, remote sandboxes (Jupyter, Docker) will call tools via
+            HTTP to this URL instead of trying to use stdio. This enables
+            the two-container architecture where MCP servers run in the
+            agent-runtimes container and code executes in a Jupyter container.
+            
+            Example: "http://agent-runtimes:8765/api/v1/mcp/proxy"
+            
+            For local development with local Jupyter:
+            "http://localhost:8765/api/v1/mcp/proxy"
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -191,6 +201,7 @@ class CodeModeConfig(BaseModel):
     sandbox_image: str | None = None
     allow_direct_tool_calls: bool = False
     max_tool_calls: int | None = None
+    mcp_proxy_url: str | None = None
 
 
 class SearchResult(BaseModel):

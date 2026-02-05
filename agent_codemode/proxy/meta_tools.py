@@ -7,7 +7,6 @@
 These are the tools exposed to AI agents for discovering
 and executing MCP tools programmatically.
 
-Based on the TypeScript implementation from agent-codemode-claude-poc:
 - Progressive tool discovery (search_tools, list_tool_names, get_tool_definition)
 - AI-powered tool selection using a subagent
 - Container/sandbox execution routing
@@ -43,7 +42,7 @@ class MetaToolProvider:
     - Get tool definitions
     - Execute code that composes tools
 
-    Based on the TypeScript MetaToolProxy, this provides:
+    This provides:
     1. list_tool_names - Fast listing when simple filtering works
     2. search_tools - AI-powered tool discovery with full definitions
     3. get_tool_definition - Get schema for a specific tool

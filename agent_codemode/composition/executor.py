@@ -237,25 +237,162 @@ except NameError:
 
         # For Jupyter/remote sandboxes, set up in-sandbox registry for tool calling
         # Use actual sandbox type detection, not config
+        print(f"[SETUP ENV] is_local_eval={is_local_eval}, config.mcp_proxy_url={self.config.mcp_proxy_url}", file=_sys.stderr)
         if not is_local_eval:
-            # Serialize server configs for the sandbox
-            server_configs = [
-                {
-                    "name": config.name,
-                    "url": config.url,
-                    "command": config.command,
-                    "args": config.args,
-                    "env": config.env,
-                }
-                for config in self.registry._servers.values()
-            ]
+            # =======================================================================
+            # Two-Container Codemode Architecture
+            # =======================================================================
+            #
+            # When using a remote sandbox (Jupyter kernel in another container or
+            # process), the generated code needs to call MCP tools. There are two modes:
+            #
+            # 1. HTTP Proxy Mode (recommended for two-container setups):
+            #    - mcp_proxy_url is set (e.g., "http://agent-runtimes:8765/api/v1/mcp/proxy")
+            #    - Tool calls from the Jupyter kernel go via HTTP to the proxy endpoint
+            #    - The proxy routes to the stdio MCP servers in agent-runtimes
+            #
+            #    ┌─────────────────────┐         ┌─────────────────────┐
+            #    │  Jupyter Container  │  HTTP   │  Agent-Runtimes     │
+            #    │  ┌───────────────┐  │ ──────▶ │  ┌───────────────┐  │
+            #    │  │ Kernel        │  │         │  │ /mcp/proxy    │  │
+            #    │  │ await tool()  │  │         │  │   ↓           │  │
+            #    │  └───────────────┘  │         │  │ MCP Server    │  │
+            #    └─────────────────────┘         │  │ (stdio)       │  │
+            #                                    │  └───────────────┘  │
+            #                                    └─────────────────────┘
+            #
+            # 2. Direct MCP Client Mode (legacy, requires agent-codemode in sandbox):
+            #    - mcp_proxy_url is not set
+            #    - Each MCP server config is serialized and MCPClient is created in sandbox
+            #    - Requires stdio MCP processes accessible from the sandbox (not always possible)
+            #
+            # =======================================================================
             
-            in_sandbox_registry_setup = f'''
+            if self.config.mcp_proxy_url:
+                # HTTP Proxy Mode: Use HTTP calls to agent-runtimes proxy endpoint
+                proxy_url = self.config.mcp_proxy_url.rstrip("/")
+                
+                in_sandbox_http_caller_setup = f'''
+# =======================================================================
+# HTTP Proxy Tool Caller for Two-Container Codemode
+# =======================================================================
+#
+# This code is injected into the Jupyter kernel to enable tool calls
+# via HTTP to the agent-runtimes container's MCP proxy endpoint.
+#
+# Architecture:
+#   Jupyter Kernel                    Agent-Runtimes
+#   ─────────────                    ──────────────
+#   await github__star_repo()   ───HTTP POST───▶  /api/v1/mcp/proxy/github/tools/star_repo
+#                                                      │
+#                                                      ▼
+#                                              MCP Server (stdio)
+#                                                      │
+#                                                      ▼
+#                               ◀───────────────  Tool Result
+# =======================================================================
+
+import httpx
+import json
+import sys
+import asyncio
+
+__MCP_PROXY_URL__ = "{proxy_url}"
+
+async def __call_tool__(tool_name: str, arguments: dict) -> dict:
+    """Call a tool via HTTP proxy to agent-runtimes.
+    
+    This function routes tool calls through the MCP proxy endpoint,
+    which forwards them to the appropriate stdio MCP server.
+    
+    Args:
+        tool_name: Full tool name in format "server__toolname" (e.g., "github__star_repo")
+        arguments: Tool arguments dictionary
+        
+    Returns:
+        Tool result dictionary
+    """
+    # Parse server name from tool_name (format: server__toolname)
+    if "__" not in tool_name:
+        return {{"isError": True, "content": [{{"type": "text", "text": f"Invalid tool name format: {{tool_name}}. Expected server__toolname"}}]}}
+    
+    server_name, original_tool_name = tool_name.split("__", 1)
+    
+    # Build the proxy URL
+    # Format: /api/v1/mcp/proxy/{{server_name}}/tools/{{tool_name}}
+    url = f"{{__MCP_PROXY_URL__}}/{{server_name}}/tools/{{original_tool_name}}"
+    
+    print(f"[HTTP Proxy] Calling tool: {{tool_name}} -> {{url}}", file=sys.stderr)
+    
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            response = await client.post(
+                url,
+                json={{"arguments": arguments}},
+                headers={{"Content-Type": "application/json"}},
+            )
+            
+            if response.status_code == 404:
+                return {{
+                    "isError": True,
+                    "content": [{{"type": "text", "text": f"MCP server '{{server_name}}' not found or tool '{{original_tool_name}}' not available"}}]
+                }}
+            
+            if response.status_code != 200:
+                return {{
+                    "isError": True,
+                    "content": [{{"type": "text", "text": f"HTTP {{response.status_code}}: {{response.text}}"}}]
+                }}
+            
+            result = response.json()
+            
+            # Convert proxy response to MCP format
+            if result.get("success", False):
+                return {{
+                    "isError": False,
+                    "content": [{{"type": "text", "text": json.dumps(result.get("result", {{}})) if isinstance(result.get("result"), (dict, list)) else str(result.get("result", ""))}}]
+                }}
+            else:
+                return {{
+                    "isError": True,
+                    "content": [{{"type": "text", "text": result.get("error", "Unknown error")}}]
+                }}
+                
+    except httpx.ConnectError as e:
+        return {{
+            "isError": True,
+            "content": [{{"type": "text", "text": f"Connection error to MCP proxy at {{__MCP_PROXY_URL__}}: {{e}}"}}]
+        }}
+    except Exception as e:
+        return {{
+            "isError": True,
+            "content": [{{"type": "text", "text": f"HTTP proxy error: {{e}}"}}]
+        }}
+
+print(f"[SETUP] HTTP proxy tool caller configured for {{__MCP_PROXY_URL__}}", file=sys.stderr)
+'''
+                self._sandbox.run_code(in_sandbox_http_caller_setup)
+            else:
+                # Direct MCP Client Mode (legacy) - requires agent-codemode in sandbox
+                # This mode is used when MCP servers can be accessed directly from the sandbox
+                server_configs = [
+                    {
+                        "name": config.name,
+                        "url": config.url,
+                        "command": config.command,
+                        "args": config.args,
+                        "env": config.env,
+                    }
+                    for config in self.registry._servers.values()
+                ]
+                
+                in_sandbox_registry_setup = f'''
 try:
     from agent_codemode.proxy.mcp_client import MCPClient
 except Exception as exc:
     raise RuntimeError(
-        "agent_codemode.proxy.mcp_client is required in the sandbox environment"
+        "agent_codemode.proxy.mcp_client is required in the sandbox environment. "
+        "Consider using mcp_proxy_url for two-container setups."
     ) from exc
 
 class _SandboxRegistry:
@@ -297,8 +434,11 @@ class _SandboxExecutor:
 
 __sandbox_registry__ = _SandboxRegistry({server_configs!r})
 __executor__ = _SandboxExecutor(__sandbox_registry__)
+
+async def __call_tool__(tool_name, arguments):
+    return await __sandbox_registry__.call_tool(tool_name, arguments)
 '''
-            self._sandbox.run_code(in_sandbox_registry_setup)
+                self._sandbox.run_code(in_sandbox_registry_setup)
 
         # Set up the generated client to use __call_tool__
         caller_setup_code = '''
@@ -773,12 +913,42 @@ async def __user_code__():
         setup_code: str,
         timeout: Optional[float] = None,
     ) -> ExecutionResult:
-        """Execute code in Jupyter/remote sandbox using run_code()."""
-        # Run setup code first
-        self._sandbox.run_code(setup_code, timeout=timeout)
+        """Execute code in Jupyter/remote sandbox using run_code().
         
-        # Then run user code
-        return self._sandbox.run_code(code, timeout=timeout)
+        IMPORTANT: The sandbox.run_code() is synchronous and blocks waiting
+        for the kernel to complete. When the kernel code calls back to the
+        agent-runtimes server (e.g., via MCP proxy for tool calls), we need
+        the event loop to be free to handle those requests. Therefore, we run
+        the blocking code in a thread pool using asyncio.to_thread().
+        
+        This prevents the deadlock:
+        1. FastAPI endpoint -> Jupyter sandbox (waiting)
+        2. Jupyter sandbox -> MCP proxy HTTP request
+        3. Without to_thread: DEADLOCK (event loop blocked)
+        4. With to_thread: MCP proxy handles request, kernel continues
+        """
+        import asyncio
+        
+        # Run setup code in thread pool to avoid blocking event loop
+        await asyncio.to_thread(self._sandbox.run_code, setup_code, timeout=timeout)
+        
+        # Re-register the tool caller since the module cache was cleared
+        # The __call_tool__ function was defined during initial setup and persists
+        # in the kernel's global namespace, but we need to re-wire it to the
+        # freshly-loaded generated.client module
+        tool_caller_rewire = '''
+try:
+    from generated.client import set_tool_caller
+    set_tool_caller(__call_tool__)
+except (ImportError, NameError) as e:
+    import sys
+    print(f"[EXECUTE] Failed to rewire tool caller: {type(e).__name__}: {e}", file=sys.stderr)
+'''
+        await asyncio.to_thread(self._sandbox.run_code, tool_caller_rewire, timeout=timeout)
+        
+        # Run user code in thread pool - this is where tool calls happen
+        # and the kernel may call back to the MCP proxy
+        return await asyncio.to_thread(self._sandbox.run_code, code, timeout=timeout)
 
     def _indent_code(self, code: str, spaces: int) -> str:
         """Indent code by a number of spaces.
