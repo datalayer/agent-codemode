@@ -437,12 +437,21 @@ if PYDANTIC_AI_AVAILABLE:
             executor = getattr(self, "_executor", None)
             if executor and getattr(executor, "_skills_metadata", None):
                 skill_funcs = ["list_skills", "load_skill", "read_skill_resource", "run_skill"]
+                # Build a summary of all skill scripts with their descriptions
+                skills_meta = executor._skills_metadata
+                skill_scripts_summary = []
+                for skill_meta in skills_meta:
+                    for script in skill_meta.get("scripts", []):
+                        skill_scripts_summary.append(
+                            f"{skill_meta['name']}/{script['name']}: {script.get('description', '')}"
+                        )
                 server_entries.append({
                     "name": "skills",
-                    "description": "Agent skills – reusable task scripts",
+                    "description": "Agent skills \u2013 reusable task scripts",
                     "tool_count": len(skill_funcs),
                     "import_path": f"from generated.skills import {', '.join(skill_funcs)}",
                     "functions": skill_funcs,
+                    "available_scripts": skill_scripts_summary,
                 })
 
             return {

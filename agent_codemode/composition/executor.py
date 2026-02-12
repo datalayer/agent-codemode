@@ -727,18 +727,27 @@ __skills_path__ = __generated_path__ / "skills"
 __skills_path__.mkdir(parents=True, exist_ok=True)
 
 # --- list_skills binding ---
-__list_skills_code__ = """# Auto-generated skill binding for list_skills
-from typing import Any, Optional
-from ..client import call_tool
+# Embed the catalog directly so list_skills works without an HTTP round-trip.
+# This makes the Jupyter behaviour consistent with local-eval (on-disk)
+# bindings which also embed _SKILL_CATALOG as a constant.
+import json as _json
+__catalog_json__ = _json.dumps(__skills_metadata__, ensure_ascii=False, indent=2)
 
-async def list_skills(arguments: Optional[dict[str, Any]] = None, **kwargs: Any) -> Any:
-    \\"\\"\\"List all available skills and their descriptions.\\"\\"\\"
-    if arguments is None:
-        arguments = kwargs
-    else:
-        arguments.update(kwargs)
-    return await call_tool("skills__list_skills", arguments)
+__list_skills_template__ = """# Auto-generated skill binding for list_skills
+import json
+from typing import Any
+
+_SKILL_CATALOG = json.loads(CATALOG_PLACEHOLDER_TOKEN)
+
+
+async def list_skills() -> list[dict[str, Any]]:
+    return _SKILL_CATALOG
 """
+
+__list_skills_code__ = __list_skills_template__.replace(
+    "CATALOG_PLACEHOLDER_TOKEN", repr(__catalog_json__)
+)
+
 (__skills_path__ / "list_skills.py").write_text(__list_skills_code__)
 
 # --- load_skill binding ---

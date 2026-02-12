@@ -269,6 +269,90 @@ class TestCodemodeToolsetPostInit:
 
 
 # ---------------------------------------------------------------------------
+# 3b. generate_skills_in_sandbox embeds catalog
+# ---------------------------------------------------------------------------
+
+class TestGenerateSkillsInSandbox:
+    """Test that generate_skills_in_sandbox() produces correct bindings
+    for Jupyter/remote sandboxes."""
+
+    class MockRemoteSandbox:
+        """Sandbox mock that captures run_code calls (no _namespaces)."""
+        def __init__(self):
+            self.code_calls: list[str] = []
+            self._started = True
+
+        def run_code(self, code: str, **kwargs):
+            self.code_calls.append(code)
+            exec(compile(code, "<sandbox>", "exec"))
+            from code_sandboxes.models import ExecutionResult
+            return ExecutionResult()
+
+        def start(self):
+            self._started = True
+
+        def stop(self):
+            self._started = False
+
+        def register_tool_caller(self, caller):
+            pass
+
+    def test_list_skills_embeds_catalog(self, tmp_path: Path):
+        """generate_skills_in_sandbox should embed _SKILL_CATALOG in list_skills.py."""
+        from agent_codemode.composition.executor import CodeModeExecutor
+
+        registry = ToolRegistry()
+        config = CodeModeConfig(
+            generated_path=str(tmp_path / "generated"),
+            workspace_path=str(tmp_path / "workspace"),
+            skills_path=str(tmp_path / "skills"),
+        )
+        executor = CodeModeExecutor(registry=registry, config=config)
+
+        # Inject a mock remote sandbox
+        sandbox = self.MockRemoteSandbox()
+        executor._sandbox = sandbox
+
+        executor.set_skills_metadata(SAMPLE_SKILLS_METADATA)
+        executor.generate_skills_in_sandbox()
+
+        # The sandbox should have received at least one run_code call
+        assert len(sandbox.code_calls) >= 1
+
+        # The generated list_skills.py should contain the catalog JSON,
+        # not a call_tool invocation
+        gen_code = sandbox.code_calls[-1]
+        assert "pdf-extractor" in gen_code
+        assert "csv-analyzer" in gen_code
+        # Should NOT contain call_tool for list_skills (embedded instead)
+        assert "skills__list_skills" not in gen_code
+
+    def test_other_bindings_use_call_tool(self, tmp_path: Path):
+        """load_skill, read_skill_resource, run_skill should still use call_tool."""
+        from agent_codemode.composition.executor import CodeModeExecutor
+
+        registry = ToolRegistry()
+        config = CodeModeConfig(
+            generated_path=str(tmp_path / "generated"),
+            workspace_path=str(tmp_path / "workspace"),
+            skills_path=str(tmp_path / "skills"),
+        )
+        executor = CodeModeExecutor(registry=registry, config=config)
+
+        sandbox = self.MockRemoteSandbox()
+        executor._sandbox = sandbox
+
+        executor.set_skills_metadata(SAMPLE_SKILLS_METADATA)
+        executor.generate_skills_in_sandbox()
+
+        gen_code = sandbox.code_calls[-1]
+        # These should still use call_tool for HTTP proxy routing
+        assert "skills__load_skill" in gen_code
+        assert "skills__read_skill_resource" in gen_code
+        assert "skills__run_skill_script" in gen_code
+
+
+# ---------------------------------------------------------------------------
 # 4. Full codegen + import round-trip (no sandbox needed)
 # ---------------------------------------------------------------------------
 
