@@ -13,7 +13,7 @@ When you connect an MCP Server to Agent Codemode, it automatically generates typ
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────────────────┐
 │   MCP Server    │ ──▶ │  Tool Registry  │ ──▶ │  Generated Python Bindings  │
-│  (filesystem,   │     │   (discovers    │     │   from generated.servers.X  │
+│  (filesystem,   │     │   (discovers    │     │   from generated.mcp.X  │
 │   web, db...)   │     │    tools)       │     │   import tool_a, tool_b     │
 └─────────────────┘     └─────────────────┘     └─────────────────────────────┘
 ```
@@ -100,10 +100,10 @@ for server_name, tools in tools_by_server.items():
 
 ## Generated Bindings
 
-Agent Codemode generates Python bindings in the `generated/servers/` directory:
+Agent Codemode generates Python bindings in the `generated/mcp/` directory:
 
 ```python
-# Generated: generated/servers/filesystem.py
+# Generated: generated/mcp/filesystem.py
 async def read_file(arguments: dict) -> str:
     """Read the complete contents of a file.
     
@@ -133,8 +133,8 @@ async def write_file(arguments: dict) -> dict:
 Import and use the generated bindings in your code:
 
 ```python
-from generated.servers.filesystem import read_file, write_file, list_directory
-from generated.servers.web import fetch_url
+from generated.mcp.filesystem import read_file, write_file, list_directory
+from generated.mcp.web import fetch_url
 
 # Read a file
 content = await read_file({"path": "/data/config.json"})
@@ -157,9 +157,9 @@ Generated tools follow the pattern `{server_name}__{tool_name}`:
 
 | MCP Server | MCP Tool | Generated Import |
 |------------|----------|-----------------|
-| `filesystem` | `read_file` | `from generated.servers.filesystem import read_file` |
-| `web` | `fetch` | `from generated.servers.web import fetch` |
-| `database` | `query` | `from generated.servers.database import query` |
+| `filesystem` | `read_file` | `from generated.mcp.filesystem import read_file` |
+| `web` | `fetch` | `from generated.mcp.web import fetch` |
+| `database` | `query` | `from generated.mcp.database import query` |
 
 ## Tool Metadata
 
@@ -280,8 +280,8 @@ await registry.discover_all()
 # Execute code that uses tools from multiple servers
 async with CodeModeExecutor(registry) as executor:
     result = await executor.execute("""
-        from generated.servers.filesystem import read_file, write_file
-        from generated.servers.github import create_issue
+        from generated.mcp.filesystem import read_file, write_file
+        from generated.mcp.github import create_issue
         
         # Read local file
         content = await read_file({"path": "/workspace/bug-report.txt"})

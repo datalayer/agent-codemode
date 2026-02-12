@@ -28,7 +28,7 @@ class PythonCodeGenerator:
         generator.generate_from_tools({"bash__ls": tool_def, "bash__cat": tool_def})
 
         # Generated code can be imported:
-        # from generated.servers.bash import ls, cat
+        # from generated.mcp.bash import ls, cat
         # result = await ls({"path": "/tmp"})
     """
 
@@ -39,7 +39,7 @@ class PythonCodeGenerator:
             output_path: Directory to write generated code.
         """
         self.output_path = Path(output_path)
-        self.servers_path = self.output_path / "servers"
+        self.mcp_path = self.output_path / "mcp"
 
     def generate_from_tools(self, tools: dict[str, ToolDefinition]) -> None:
         """Generate Python bindings for all tools.
@@ -57,26 +57,26 @@ class PythonCodeGenerator:
 
         # Create directory structure
         self.output_path.mkdir(parents=True, exist_ok=True)
-        self.servers_path.mkdir(parents=True, exist_ok=True)
+        self.mcp_path.mkdir(parents=True, exist_ok=True)
         logger.info(
-            "Generating MCP bindings to %s (servers dir: %s)",
+            "Generating MCP bindings to %s (mcp dir: %s)",
             self.output_path,
-            self.servers_path,
+            self.mcp_path,
         )
 
         # Generate client module
         self._generate_client_module()
 
-        # Generate server modules
+        # Generate server modules under servers/mcp/
         for server_name, tools_list in server_tools.items():
             logger.info(
                 "Generating bindings for server '%s' into %s",
                 server_name,
-                self.servers_path / server_name,
+                self.mcp_path / server_name,
             )
             self._generate_server_module(server_name, tools_list)
 
-        # Generate index module
+        # Generate index modules
         self._generate_index_module(list(server_tools.keys()))
 
     def _generate_client_module(self) -> None:
@@ -191,7 +191,7 @@ async def call_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
             server_name: Name of the server.
             tools: List of tool definitions.
         """
-        server_dir = self.servers_path / server_name
+        server_dir = self.mcp_path / server_name
         server_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate individual tool files
@@ -340,19 +340,18 @@ __all__ = [
         Args:
             server_names: List of server names.
         """
-        imports = []
-        for name in server_names:
-            imports.append(f"from .servers import {name}")
-
-        code = f'''# Auto-generated MCP tool bindings index
+        code = '''# Auto-generated MCP tool bindings index
 # Copyright (c) 2025-2026 Datalayer, Inc.
 # BSD 3-Clause License
 
-"""Generated MCP tool bindings.
+"""Generated tool bindings.
 
-Import tools from server modules:
-    from generated.servers.bash import ls, cat
-    from generated.servers.computer import screenshot
+Import MCP tools from server modules:
+    from generated.mcp.bash import ls, cat
+    from generated.mcp.computer import screenshot
+
+Import skill tools (when skills are enabled):
+    from generated.skills import list_skills, run_skill
 """
 
 from .client import call_tool, set_tool_caller
@@ -366,21 +365,224 @@ __all__ = [
         index_path = self.output_path / "__init__.py"
         index_path.write_text(code)
 
-        # Also create servers/__init__.py
-        servers_index = f'''# Auto-generated servers index
+        # Create mcp/__init__.py with MCP server imports
+        mcp_index = f'''# Auto-generated MCP servers index
 # Copyright (c) 2025-2026 Datalayer, Inc.
 # BSD 3-Clause License
 
-"""Server modules."""
+"""MCP server modules."""
 
 {chr(10).join(f"from . import {name}" for name in server_names)}
 
 __all__ = {server_names!r}
 '''
+        mcp_index_path = self.mcp_path / "__init__.py"
+        mcp_index_path.write_text(mcp_index)
 
-        servers_index_path = self.servers_path / "__init__.py"
-        servers_index_path.write_text(servers_index)
+    def generate_skill_bindings(
+        self,
+        skills: list[dict[str, Any]],
+    ) -> None:
+        """Generate Python bindings for skills under servers/skills/.
 
+        Each skill becomes a callable async function that routes through
+        the same ``call_tool`` / ``__call_tool__`` mechanism used by MCP
+        tools, with tool names prefixed by ``skills__``.
+
+        Generated functions:
+
+        * ``list_skills()`` – returns JSON list of available skills
+        * ``load_skill(skill_name)`` – returns full SKILL.md content
+        * ``read_skill_resource(skill_name, resource_name)`` – reads a resource
+        * ``run_skill(skill_name, script_name, args)`` – executes a script
+
+        Args:
+            skills: List of skill metadata dicts, each with at least
+                ``name``, ``description``, and optionally ``scripts``
+                and ``resources``.
+        """
+        skills_dir = self.output_path / "skills"
+        skills_dir.mkdir(parents=True, exist_ok=True)
+
+        logger.info(
+            "Generating skill bindings for %d skills into %s",
+            len(skills),
+            skills_dir,
+        )
+
+        # Embed the skill catalog as a constant so list_skills is self-contained
+        import json as _json
+        skill_catalog_json = _json.dumps(skills, ensure_ascii=False, indent=2)
+
+        # --- list_skills ---
+        list_skills_code = f'''# Auto-generated skill binding
+# Copyright (c) 2025-2026 Datalayer, Inc.
+# BSD 3-Clause License
+
+"""List all available skills."""
+
+from typing import Any
+from ..client import call_tool
+
+_SKILL_CATALOG = {skill_catalog_json}
+
+
+async def list_skills() -> list[dict[str, Any]]:
+    """List all available skills with their names, descriptions, and schemas.
+
+    Returns a list of skill metadata dictionaries. Each entry contains:
+
+    - ``name`` (str): Skill identifier, e.g. ``"github"``
+    - ``description`` (str): What the skill does
+    - ``scripts`` (list[dict]): Available scripts, each with:
+        - ``name`` (str): Script name to pass to ``run_skill``
+        - ``description`` (str): What the script does
+        - ``parameters`` (list[dict]): CLI parameters, each with
+          ``name``, ``type``, ``description``, and optionally ``required``
+        - ``returns`` (str): Description of what the script returns
+        - ``usage`` (str): Example command line invocation
+        - ``env_vars`` (list[str]): Required environment variables
+    - ``resources`` (list[dict]): Available resource files
+
+    This is a local lookup – no tool call is made.
+
+    Example::
+
+        skills = await list_skills()
+        for skill in skills:
+            print(f"Skill: {{skill['name']}}")
+            for script in skill.get("scripts", []):
+                print(f"  Script: {{script['name']}}")
+                for param in script.get("parameters", []):
+                    print(f"    --{{param['name']}} ({{param.get('type', 'str')}}): {{param.get('description', '')}}")
+    """
+    return _SKILL_CATALOG
+'''
+        (skills_dir / "list_skills.py").write_text(list_skills_code)
+
+        # --- load_skill ---
+        load_skill_code = '''# Auto-generated skill binding
+# Copyright (c) 2025-2026 Datalayer, Inc.
+# BSD 3-Clause License
+
+"""Load full skill content."""
+
+from typing import Any
+from ..client import call_tool
+
+
+async def load_skill(skill_name: str) -> Any:
+    """Load the full content and instructions for a skill.
+
+    Args:
+        skill_name: Name of the skill to load.
+
+    Returns:
+        Full SKILL.md content as a string.
+    """
+    return await call_tool("skills__load_skill", {"skill_name": skill_name})
+'''
+        (skills_dir / "load_skill.py").write_text(load_skill_code)
+
+        # --- read_skill_resource ---
+        read_resource_code = '''# Auto-generated skill binding
+# Copyright (c) 2025-2026 Datalayer, Inc.
+# BSD 3-Clause License
+
+"""Read a skill resource."""
+
+from typing import Any
+from ..client import call_tool
+
+
+async def read_skill_resource(skill_name: str, resource_name: str) -> Any:
+    """Read a resource file from a skill.
+
+    Args:
+        skill_name: Name of the skill.
+        resource_name: Name of the resource to read.
+
+    Returns:
+        Resource content as a string.
+    """
+    return await call_tool(
+        "skills__read_skill_resource",
+        {"skill_name": skill_name, "resource_name": resource_name},
+    )
+'''
+        (skills_dir / "read_skill_resource.py").write_text(read_resource_code)
+
+        # --- run_skill ---
+        run_skill_code = '''# Auto-generated skill binding
+# Copyright (c) 2025-2026 Datalayer, Inc.
+# BSD 3-Clause License
+
+"""Run a skill script."""
+
+from typing import Any
+from ..client import call_tool
+
+
+async def run_skill(
+    skill_name: str,
+    script_name: str,
+    args: list[str] | None = None,
+) -> Any:
+    """Execute a script from a skill with arguments.
+
+    The result is a dict with keys: ``output``, ``exit_code``,
+    ``success``, ``error``, ``error_type``, ``error_value``,
+    ``error_traceback``, ``execution_time``, ``script_name``.
+
+    Args:
+        skill_name: Name of the skill.
+        script_name: Name of the script to run.
+        args: Arguments to pass to the script (default: []).
+
+    Returns:
+        ScriptExecutionResult dict.
+    """
+    return await call_tool(
+        "skills__run_skill_script",
+        {
+            "skill_name": skill_name,
+            "script_name": script_name,
+            "args": args or [],
+        },
+    )
+'''
+        (skills_dir / "run_skill.py").write_text(run_skill_code)
+
+        # --- __init__.py ---
+        init_code = '''# Auto-generated skills module
+# Copyright (c) 2025-2026 Datalayer, Inc.
+# BSD 3-Clause License
+
+"""Skill bindings – import and call skills from execute_code.
+
+Example::
+
+    from generated.skills import list_skills, run_skill
+
+    skills = await list_skills()
+    result = await run_skill("pdf-extractor", "extract", ["report.pdf"])
+"""
+
+from .list_skills import list_skills
+from .load_skill import load_skill
+from .read_skill_resource import read_skill_resource
+from .run_skill import run_skill
+
+__all__ = [
+    "list_skills",
+    "load_skill",
+    "read_skill_resource",
+    "run_skill",
+]
+'''
+        (skills_dir / "__init__.py").write_text(init_code)
+
+        logger.info("Generated skill bindings: list_skills, load_skill, read_skill_resource, run_skill")
     def _sanitize_name(self, name: str) -> str:
         """Sanitize a name to be a valid Python identifier.
 

@@ -12,6 +12,12 @@ Skills APIs live in agent-skills. Import skill managers and helpers from `agent_
 
 ## How It Works
 
+Skills can be used in two complementary ways:
+
+### Pattern A: Direct Skill Toolset
+
+The `AgentSkillsToolset` from agent-skills provides skill tools (`list_skills`, `load_skill`, `run_skill_script`, etc.) as a separate Pydantic AI toolset. This is the standalone pattern.
+
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────────────────┐
 │  Skill Files    │ ──▶ │ Skills Manager  │ ──▶ │  Callable Python Functions  │
@@ -21,10 +27,61 @@ Skills APIs live in agent-skills. Import skill managers and helpers from `agent_
 └─────────────────┘     └─────────────────┘     └─────────────────────────────┘
 ```
 
+### Pattern B: Skills as Generated Bindings (Codemode Integration)
+
+When skills are **wired into Codemode**, Agent Codemode generates typed Python bindings for skill operations — the same way it generates bindings for MCP server tools. This allows agents to call skill tools from within `execute_code`, using the same import pattern:
+
+```
+┌─────────────────┐     ┌─────────────────────┐     ┌─────────────────────────────────────┐
+│  AgentSkills    │ ──▶ │ generate_skill_     │ ──▶ │  Generated Python Bindings          │
+│  Toolset        │     │ bindings()          │     │   from generated.skills            │
+│  (list, load,   │     │ (codegen.py)        │     │   import list_skills, run_skill      │
+│   run, read)    │     │                     │     │                                     │
+└─────────────────┘     └─────────────────────┘     └─────────────────────────────────────┘
+```
+
+This pattern is used by **agent-runtimes** when both Codemode and Skills are enabled. The skill tools are automatically wired into Codemode via `wire_skills_into_codemode()`, so agents can discover and call skill operations inside Python code alongside MCP tools.
+
+**Generated structure:**
+
+```
+generated/
+├── mcp/
+│   ├── filesystem.py       # MCP server bindings
+│   ├── web.py              # MCP server bindings
+│   └── skills/             # Skill bindings (auto-generated)
+│       ├── __init__.py
+│       ├── list_skills.py
+│       ├── load_skill.py
+│       ├── read_skill_resource.py
+│       └── run_skill.py
+```
+
+**Usage in `execute_code`:**
+
+```python
+from generated.skills import list_skills, load_skill, run_skill
+
+# Discover available skills
+skills = await list_skills({})
+
+# Load a skill's instructions
+instructions = await load_skill({"skill_name": "pdf-extractor"})
+
+# Run a skill script
+result = await run_skill({
+    "skill_name": "pdf-extractor",
+    "script_name": "extract.py",
+    "args": {"path": "/data/report.pdf"}
+})
+```
+
+### Lifecycle
+
 1. **Create** - Write skill files in `skills/` directory or save via `agent_skills.SimpleSkillsManager`
 2. **Discover** - Agent Codemode discovers all available skills
 3. **Load** - Skills are loaded as callable Python functions
-4. **Use** - Import and call skills like any Python module
+4. **Use** - Import and call skills like any Python module (or via generated bindings in Codemode)
 
 ## Overview
 
@@ -53,7 +110,7 @@ async def batch_process(input_dir: str, output_dir: str) -> dict:
     Returns:
         Processing statistics.
     """
-    from generated.servers.filesystem import list_directory, read_file, write_file
+    from generated.mcp.filesystem import list_directory, read_file, write_file
     
     entries = await list_directory({"path": input_dir})
     processed = 0
@@ -84,7 +141,7 @@ import json
 
 async def analyze_file(file_path: str) -> dict:
     """Analyze a file and return statistics."""
-    from generated.servers.filesystem import read_file
+    from generated.mcp.filesystem import read_file
     
     content = await read_file({"path": file_path})
     lines = content.split('\n')
@@ -171,7 +228,7 @@ Use these helpers in other skills:
 
 ```python
 from skills.helpers import retry, wait_for
-from generated.servers.web import fetch_url
+from generated.mcp.web import fetch_url
 
 # Retry a flaky API call
 data = await retry(lambda: fetch_url({"url": "https://api.example.com/data"}))
@@ -363,6 +420,71 @@ async with limiter:
 4. **Error handling**: Include try/except for robust execution
 5. **Composability**: Design skills to be easily combined with others
 6. **Testing**: Test skills independently before composing them
+7. **Codemode integration**: When both are enabled, prefer using skill bindings via `generated.skills` for consistency with MCP tool patterns
+
+## Generated Skill Bindings (Approach D)
+
+When Codemode and Skills are both enabled in agent-runtimes, skills are automatically wired into Codemode through a process called **Approach D: Skills as Generated Bindings**.
+
+### How It Works
+
+1. **Binding generation**: `generate_skill_bindings()` in `codegen.py` produces async Python wrapper functions for each skill tool (`list_skills`, `load_skill`, `read_skill_resource`, `run_skill`).
+
+2. **Executor routing**: When code in the sandbox calls `await list_skills({})`, the call is routed through the executor's `call_tool("skills__list_skills", args)`, which delegates to a **skill tool caller** callback connected to the real `AgentSkillsToolset`.
+
+3. **Post-init callback**: Since Codemode lazily initializes its executor, skill wiring uses a **post-init callback** (`add_post_init_callback`) to defer binding generation and caller registration until the executor is ready.
+
+### Call Flow
+
+```
+Sandbox Code                    Executor                       AgentSkillsToolset
+     │                              │                                  │
+     │  from generated.mcp.     │                                  │
+     │  skills import run_skill     │                                  │
+     │                              │                                  │
+     │  await run_skill({...})      │                                  │
+     │ ─────────────────────────▶   │                                  │
+     │                              │  call_tool("skills__run_skill")  │
+     │                              │ ─────────────────────────────▶   │
+     │                              │                                  │  execute skill
+     │                              │     ◀────────────────────────    │
+     │     ◀────────────────────    │                                  │
+     │         result               │                                  │
+```
+
+### Remote Sandbox Support
+
+When using a remote sandbox (e.g., Datalayer Runtime or Jupyter kernel), skill bindings are generated **inline** inside `_generate_tools_in_sandbox()` alongside MCP tool bindings. The sandbox calls back to agent-runtimes via HTTP, where a **skills proxy** routes the request to the real `AgentSkillsToolset`:
+
+```
+Remote Sandbox                   agent-runtimes                    AgentSkillsToolset
+     │                              │                                  │
+     │  await run_skill({...})      │                                  │
+     │ ──── HTTP POST ────────▶     │                                  │
+     │    /mcp-proxy/skills/        │                                  │
+     │    run_skill                  │  skills_proxy_caller(...)        │
+     │                              │ ─────────────────────────────▶   │
+     │                              │                                  │  execute skill
+     │                              │     ◀────────────────────────    │
+     │     ◀────────────────────    │                                  │
+     │         result               │                                  │
+```
+
+### Post-Init Callbacks
+
+The `CodemodeToolset` supports deferred initialization callbacks via `add_post_init_callback()`. This is used by agent-runtimes to wire skills into Codemode at the right time:
+
+```python
+from agent_codemode import CodemodeToolset
+
+toolset = CodemodeToolset(registry)
+
+# Register a callback that fires once after lazy initialization
+toolset.add_post_init_callback(lambda ts: wire_skills(ts))
+
+# Callbacks fire automatically when the executor is first initialized
+# (e.g., on the first call to execute_code)
+```
 
 ## See Also
 

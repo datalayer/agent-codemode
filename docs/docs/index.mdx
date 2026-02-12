@@ -87,7 +87,7 @@ Agent Codemode solves these by letting agents **write code** that composes tools
 # Instead of many individual tool calls...
 # The agent writes code that orchestrates tools programmatically
 
-from generated.servers.filesystem import read_file, write_file
+from generated.mcp.filesystem import read_file, write_file
 import asyncio
 
 # Read multiple files in parallel
@@ -159,7 +159,7 @@ executor = CodeModeExecutor(registry)
 await executor.setup()
 
 result = await executor.execute("""
-    from generated.servers.filesystem import read_file, write_file
+    from generated.mcp.filesystem import read_file, write_file
     content = await read_file({"path": "/tmp/input.txt"})
     await write_file({"path": "/tmp/output.txt", "content": content.upper()})
 """)
@@ -186,7 +186,7 @@ registry.add_server(MCPServerConfig(
 await registry.discover_all()
 
 # Now use the generated bindings
-from generated.servers.filesystem import read_file, write_file
+from generated.mcp.filesystem import read_file, write_file
 content = await read_file({"path": "/workspace/data.txt"})
 ```
 
@@ -199,7 +199,7 @@ Use reusable code patterns that compose multiple tools:
 ```python
 # skills/batch_process.py
 async def batch_process(input_dir: str, output_dir: str) -> dict:
-    from generated.servers.filesystem import list_directory, read_file, write_file
+    from generated.mcp.filesystem import list_directory, read_file, write_file
     
     entries = await list_directory({"path": input_dir})
     for entry in entries["entries"]:
@@ -285,7 +285,7 @@ executor = CodeModeExecutor(registry)
 await executor.setup()
 
 result = await executor.execute("""
-    from generated.servers.filesystem import read_file, write_file
+    from generated.mcp.filesystem import read_file, write_file
     
     content = await read_file({"path": "/tmp/input.txt"})
     await write_file({"path": "/tmp/output.txt", "content": content.upper()})

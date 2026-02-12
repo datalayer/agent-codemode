@@ -105,7 +105,7 @@ Execute Python code that composes MCP tools:
 result = await client.call_tool("execute_code", {
     "code": """
 import asyncio
-from generated.servers.filesystem import read_file, write_file
+from generated.mcp.filesystem import read_file, write_file
 
 # Read multiple files in parallel
 files = ["/data/a.txt", "/data/b.txt", "/data/c.txt"]
@@ -135,7 +135,7 @@ result = await client.call_tool("save_skill", {
     "description": "Convert all files in a directory to uppercase",
     "code": '''
 async def batch_uppercase(input_dir, output_dir):
-    from generated.servers.filesystem import list_directory, read_file, write_file
+    from generated.mcp.filesystem import list_directory, read_file, write_file
     
     entries = await list_directory({"path": input_dir})
     for entry in entries["entries"]:
@@ -177,7 +177,7 @@ tools = await client.call_tool("search_tools", {"query": "read files"})
 # Execute code
 result = await client.call_tool("execute_code", {
     "code": """
-from generated.servers.filesystem import read_file
+from generated.mcp.filesystem import read_file
 content = await read_file({"path": "/data/config.json"})
 print(content)
 """

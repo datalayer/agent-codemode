@@ -10,7 +10,7 @@ After generating programmatic tools from [MCP Servers](../mcp-servers/index.mdx)
 
 The `CodeModeExecutor` runs Python code that composes your generated tools. Instead of making individual tool calls through LLM inference, agents write Python code that:
 
-**Important Architecture Note:** The tools you call in your code (e.g., `from generated.servers.example_mcp import tool`) are **actual MCP tools** and communicate through the **MCP protocol**. The `CodemodeToolset` itself is a Pydantic AI toolset (not an MCP server), but it enables you to write Python code that orchestrates MCP tool calls. This is by design - MCP servers remain MCP servers, and codemode provides a code-first interface for composing them programmatically.
+**Important Architecture Note:** The tools you call in your code (e.g., `from generated.mcp.example_mcp import tool`) are **actual MCP tools** and communicate through the **MCP protocol**. The `CodemodeToolset` itself is a Pydantic AI toolset (not an MCP server), but it enables you to write Python code that orchestrates MCP tool calls. This is by design - MCP servers remain MCP servers, and codemode provides a code-first interface for composing them programmatically.
 
 - Calls multiple tools in sequence or parallel
 - Uses loops and conditionals for complex logic
@@ -33,7 +33,7 @@ await executor.setup()
 
 # Execute code
 result = await executor.execute("""
-    from generated.servers.filesystem import read_file
+    from generated.mcp.filesystem import read_file
     
     content = await read_file({"path": "/tmp/data.txt"})
     print(f"Read {len(content)} characters")
@@ -109,12 +109,38 @@ Call tools one after another:
 
 ```python
 result = await executor.execute("""
-    from generated.servers.filesystem import read_file, write_file
+    from generated.mcp.filesystem import read_file, write_file
     
     # Read, transform, write
     content = await read_file({"path": "/input.txt"})
     transformed = content.upper()
     await write_file({"path": "/output.txt", "content": transformed})
+""")
+```
+
+### Composing MCP Tools with Skills
+
+When skills are wired into Codemode, you can combine MCP tools and skill operations in the same code block:
+
+```python
+result = await executor.execute("""
+    from generated.mcp.filesystem import read_file
+    from generated.skills import list_skills, run_skill
+
+    # Discover available skills
+    skills = await list_skills({})
+    print(f"Available skills: {[s['name'] for s in skills]}")
+
+    # Use an MCP tool to read data
+    data = await read_file({"path": "/data/report.pdf"})
+
+    # Use a skill to process it
+    result = await run_skill({
+        "skill_name": "pdf-extractor",
+        "script_name": "extract.py",
+        "args": {"path": "/data/report.pdf"}
+    })
+    print(result)
 """)
 ```
 
@@ -125,7 +151,7 @@ Use `asyncio.gather` for concurrent tool calls:
 ```python
 result = await executor.execute("""
     import asyncio
-    from generated.servers.filesystem import read_file
+    from generated.mcp.filesystem import read_file
     
     files = ["a.txt", "b.txt", "c.txt", "d.txt"]
     
@@ -145,8 +171,8 @@ Use if/else for decision making:
 
 ```python
 result = await executor.execute("""
-    from generated.servers.filesystem import read_file, write_file
-    from generated.servers.web import fetch_url
+    from generated.mcp.filesystem import read_file, write_file
+    from generated.mcp.web import fetch_url
     
     # Try local file first, fall back to web
     try:
@@ -165,7 +191,7 @@ Process collections of items:
 
 ```python
 result = await executor.execute("""
-    from generated.servers.filesystem import list_directory, read_file
+    from generated.mcp.filesystem import list_directory, read_file
     
     entries = await list_directory({"path": "/documents"})
     
@@ -183,7 +209,7 @@ Use try/except for robust execution:
 
 ```python
 result = await executor.execute("""
-    from generated.servers.filesystem import read_file, write_file
+    from generated.mcp.filesystem import read_file, write_file
     
     files = ["important.txt", "optional.txt", "extra.txt"]
     results = []
@@ -204,7 +230,7 @@ result = await executor.execute("""
 
 Code executes in an isolated [sandbox](https://code-sandboxes.datalayer.tech/) for safety.
 
-**Tool Call Architecture:** When your code calls `await generate_random_text(...)` (a tool from `generated.servers.example_mcp`), it:
+**Tool Call Architecture:** When your code calls `await generate_random_text(...)` (a tool from `generated.mcp.example_mcp`), it:
 1. Executes in the sandbox environment
 2. Makes an actual MCP protocol request to the MCP server
 3. Returns the result to your code
@@ -237,8 +263,9 @@ The sandbox has access to:
 
 - Standard Python libraries
 - `asyncio` for async operations
-- Generated tool bindings (`from generated.servers.X import Y`)
-- Skills (`from skills.name import func`)
+- Generated MCP tool bindings (`from generated.mcp.X import Y`)
+- Generated skill bindings (`from generated.skills import list_skills, run_skill`) — when skills are wired into Codemode
+- Skills as direct imports (`from skills.name import func`)
 
 ## Tool Call Tracking
 

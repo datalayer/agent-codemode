@@ -81,7 +81,7 @@ Execute Python code that uses MCP tools:
 ```python
 # Agent writes and executes code
 result = execute_code(code="""
-    from generated.servers.filesystem import read_file, list_directory
+    from generated.mcp.filesystem import read_file, list_directory
     
     entries = await list_directory({"path": "/workspace"})
     for entry in entries["entries"]:

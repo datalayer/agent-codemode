@@ -21,7 +21,7 @@ Example:
     # Execute code that composes tools
     async with CodeModeExecutor(registry) as executor:
         result = await executor.execute('''
-            from generated.servers.bash import ls, cat
+            from generated.mcp.bash import ls, cat
 
             files = await ls({"path": "/tmp"})
             print(f"Found {len(files)} files")

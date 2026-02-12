@@ -114,7 +114,7 @@ def _build_system_prompt(
         "3. **execute_code** - Run Python code that composes multiple tools",
         "   Use this for complex multi-step operations. Code runs in a PERSISTENT sandbox.",
         "   Variables, functions, and state PERSIST between execute_code calls.",
-        "   Import tools using: `from generated.servers.<server_name> import <function_name>`",
+        "   Import tools using: `from generated.mcp.<server_name> import <function_name>`",
         "   NEVER use `import *` - always use explicit named imports.",
         "",
         "4. **call_tool** - Direct single-tool invocation",
@@ -332,7 +332,7 @@ def create_agent(model: str, codemode: bool) -> tuple[Agent, object | None, obje
 
         registry = ToolRegistry()
         # Server name becomes the tool prefix (e.g., example_mcp__read_text_file)
-        # and matches the generated bindings path: generated.servers.example_mcp
+        # and matches the generated bindings path: generated.mcp.example_mcp
         registry.add_server(
             MCPServerConfig(
                 name="example_mcp",
