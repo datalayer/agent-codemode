@@ -752,46 +752,76 @@ __list_skills_code__ = __list_skills_template__.replace(
 
 # --- load_skill binding ---
 __load_skill_code__ = """# Auto-generated skill binding for load_skill
-from typing import Any, Optional
+from typing import Any
 from ..client import call_tool
 
-async def load_skill(arguments: Optional[dict[str, Any]] = None, **kwargs: Any) -> Any:
-    \\"\\"\\"Load a skill by name and return its full description, scripts, and resources.\\"\\"\\"
-    if arguments is None:
-        arguments = kwargs
-    else:
-        arguments.update(kwargs)
-    return await call_tool("skills__load_skill", arguments)
+async def load_skill(skill_name: str) -> Any:
+    \\"\\"\\"Load the full content and instructions for a skill.
+
+    Args:
+        skill_name: Name of the skill to load.
+
+    Returns:
+        Full SKILL.md content as a string.
+    \\"\\"\\"
+    return await call_tool("skills__load_skill", {{"skill_name": skill_name}})
 """
 (__skills_path__ / "load_skill.py").write_text(__load_skill_code__)
 
 # --- read_skill_resource binding ---
 __read_resource_code__ = """# Auto-generated skill binding for read_skill_resource
-from typing import Any, Optional
+from typing import Any
 from ..client import call_tool
 
-async def read_skill_resource(arguments: Optional[dict[str, Any]] = None, **kwargs: Any) -> Any:
-    \\"\\"\\"Read a resource file from a skill.\\"\\"\\"
-    if arguments is None:
-        arguments = kwargs
-    else:
-        arguments.update(kwargs)
-    return await call_tool("skills__read_skill_resource", arguments)
+async def read_skill_resource(skill_name: str, resource_name: str) -> Any:
+    \\"\\"\\"Read a resource file from a skill.
+
+    Args:
+        skill_name: Name of the skill.
+        resource_name: Name of the resource to read.
+
+    Returns:
+        Resource content as a string.
+    \\"\\"\\"
+    return await call_tool(
+        "skills__read_skill_resource",
+        {{"skill_name": skill_name, "resource_name": resource_name}},
+    )
 """
 (__skills_path__ / "read_skill_resource.py").write_text(__read_resource_code__)
 
 # --- run_skill binding ---
 __run_skill_code__ = """# Auto-generated skill binding for run_skill
-from typing import Any, Optional
+from typing import Any
 from ..client import call_tool
 
-async def run_skill(arguments: Optional[dict[str, Any]] = None, **kwargs: Any) -> Any:
-    \\"\\"\\"Run a script from a skill.\\"\\"\\"
-    if arguments is None:
-        arguments = kwargs
-    else:
-        arguments.update(kwargs)
-    return await call_tool("skills__run_skill_script", arguments)
+async def run_skill(
+    skill_name: str,
+    script_name: str,
+    args: list[str] | None = None,
+) -> Any:
+    \\"\\"\\"Execute a script from a skill with arguments.
+
+    The result is a dict with keys: ``output``, ``exit_code``,
+    ``success``, ``error``, ``error_type``, ``error_value``,
+    ``error_traceback``, ``execution_time``, ``script_name``.
+
+    Args:
+        skill_name: Name of the skill.
+        script_name: Name of the script to run.
+        args: Arguments to pass to the script (default: []).
+
+    Returns:
+        ScriptExecutionResult dict.
+    \\"\\"\\"
+    return await call_tool(
+        "skills__run_skill_script",
+        {{
+            "skill_name": skill_name,
+            "script_name": script_name,
+            "args": args or [],
+        }},
+    )
 """
 (__skills_path__ / "run_skill.py").write_text(__run_skill_code__)
 
