@@ -75,7 +75,7 @@ class CodeModeExecutor:
         await executor.setup()
 
         result = await executor.execute('''
-            from generated.servers.bash import ls, cat
+            from generated.servers.mcp.bash import ls, cat
 
             files = await ls({"path": "/tmp"})
             for file in files["entries"]:
@@ -106,6 +106,31 @@ class CodeModeExecutor:
         self._tool_call_history: list[ToolCallResult] = []
         self._in_execute = False
         self._tool_calls_in_run = 0
+        self._skill_tool_caller: Any = None
+        self._skills_metadata: list[dict[str, Any]] = []
+
+    def set_skill_tool_caller(self, caller: Any) -> None:
+        """Set a callback for routing skill tool calls.
+
+        When generated skill bindings call ``call_tool("skills__<name>", args)``,
+        the executor routes the call through this callback instead of the
+        MCP tool registry.
+
+        Args:
+            caller: An async callable ``(tool_name, arguments) -> result``.
+        """
+        self._skill_tool_caller = caller
+
+    def set_skills_metadata(self, metadata: list[dict[str, Any]]) -> None:
+        """Store skill metadata for remote sandbox code generation.
+
+        When a remote/Jupyter sandbox is used, the executor regenerates
+        tool bindings inside the sandbox.  This metadata is used to also
+        generate ``servers/skills/`` bindings there.
+
+        Called by ``wire_skills_into_codemode`` in agent_factory.
+        """
+        self._skills_metadata = metadata
 
     def _is_local_eval_sandbox(self) -> bool:
         """Check if the sandbox is a local-eval type (has in-memory namespaces).
@@ -488,6 +513,7 @@ __tools_data__ = {tools_data!r}
 # Output path in sandbox - use /tmp/generated so 'from generated.servers...' works
 __generated_path__ = Path("/tmp/generated")
 __servers_path__ = __generated_path__ / "servers"
+__mcp_path__ = __servers_path__ / "mcp"
 
 def _sanitize_name(name: str) -> str:
     """Sanitize a name to be a valid Python identifier."""
@@ -525,6 +551,7 @@ def _schema_to_type_hint(schema: dict) -> str:
 # Create directory structure
 __generated_path__.mkdir(parents=True, exist_ok=True)
 __servers_path__.mkdir(parents=True, exist_ok=True)
+__mcp_path__.mkdir(parents=True, exist_ok=True)
 
 # Generate client module
 __client_code__ = """# Auto-generated MCP tool client
@@ -602,7 +629,7 @@ for tool in __tools_data__:
 
 # Generate server modules
 for server_name, tools_list in __server_tools__.items():
-    server_dir = __servers_path__ / server_name
+    server_dir = __mcp_path__ / server_name
     server_dir.mkdir(parents=True, exist_ok=True)
     
     imports = []
@@ -623,7 +650,7 @@ for server_name, tools_list in __server_tools__.items():
         # Generate tool file
         tool_code = f"""# Auto-generated tool binding for {{tool_name}}
 from typing import Any, Optional
-from ...client import call_tool
+from ....client import call_tool
 
 async def {{func_name}}(arguments: Optional[{{input_type}}] = None, **kwargs: Any) -> {{output_type}}:
     \\"\\"\\"{{description}}\\"\\"\\"
@@ -656,18 +683,107 @@ __all__ = ["call_tool", "set_tool_caller"]
 """
 (__generated_path__ / "__init__.py").write_text(__main_index__)
 
-# Generate servers index
+# Generate servers namespace package (supports mcp/ and skills/ sub-packages)
+(__servers_path__ / "__init__.py").write_text("# Namespace package for mcp and skills sub-packages\n")
+
+# Generate MCP servers index
 __server_names__ = list(__server_tools__.keys())
-__servers_index__ = f"""# Auto-generated servers index
+__mcp_index__ = f"""# Auto-generated MCP servers index
 {{chr(10).join(f"from . import {{name}}" for name in __server_names__)}}
 
 __all__ = {{__server_names__!r}}
 """
-(__servers_path__ / "__init__.py").write_text(__servers_index__)
+(__mcp_path__ / "__init__.py").write_text(__mcp_index__)
 
 print(f"Generated tool bindings for {{len(__tools_data__)}} tools in {{__generated_path__}}")
 '''
         self._sandbox.run_code(generation_code)
+
+        # Generate skill bindings in the sandbox if skills metadata is available
+        if self._skills_metadata:
+            skills_generation_code = f'''
+import os
+from pathlib import Path
+
+__skills_metadata__ = {self._skills_metadata!r}
+__generated_path__ = Path("/tmp/generated")
+__skills_path__ = __generated_path__ / "servers" / "skills"
+__skills_path__.mkdir(parents=True, exist_ok=True)
+
+# --- list_skills binding ---
+__list_skills_code__ = """# Auto-generated skill binding for list_skills
+from typing import Any, Optional
+from ...client import call_tool
+
+async def list_skills(arguments: Optional[dict[str, Any]] = None, **kwargs: Any) -> Any:
+    \\"\\"\\"List all available skills and their descriptions.\\"\\"\\"
+    if arguments is None:
+        arguments = kwargs
+    else:
+        arguments.update(kwargs)
+    return await call_tool("skills__list_skills", arguments)
+"""
+(__skills_path__ / "list_skills.py").write_text(__list_skills_code__)
+
+# --- load_skill binding ---
+__load_skill_code__ = """# Auto-generated skill binding for load_skill
+from typing import Any, Optional
+from ...client import call_tool
+
+async def load_skill(arguments: Optional[dict[str, Any]] = None, **kwargs: Any) -> Any:
+    \\"\\"\\"Load a skill by name and return its full description, scripts, and resources.\\"\\"\\"
+    if arguments is None:
+        arguments = kwargs
+    else:
+        arguments.update(kwargs)
+    return await call_tool("skills__load_skill", arguments)
+"""
+(__skills_path__ / "load_skill.py").write_text(__load_skill_code__)
+
+# --- read_skill_resource binding ---
+__read_resource_code__ = """# Auto-generated skill binding for read_skill_resource
+from typing import Any, Optional
+from ...client import call_tool
+
+async def read_skill_resource(arguments: Optional[dict[str, Any]] = None, **kwargs: Any) -> Any:
+    \\"\\"\\"Read a resource file from a skill.\\"\\"\\"
+    if arguments is None:
+        arguments = kwargs
+    else:
+        arguments.update(kwargs)
+    return await call_tool("skills__read_skill_resource", arguments)
+"""
+(__skills_path__ / "read_skill_resource.py").write_text(__read_resource_code__)
+
+# --- run_skill binding ---
+__run_skill_code__ = """# Auto-generated skill binding for run_skill_script
+from typing import Any, Optional
+from ...client import call_tool
+
+async def run_skill_script(arguments: Optional[dict[str, Any]] = None, **kwargs: Any) -> Any:
+    \\"\\"\\"Run a script from a skill.\\"\\"\\"
+    if arguments is None:
+        arguments = kwargs
+    else:
+        arguments.update(kwargs)
+    return await call_tool("skills__run_skill_script", arguments)
+"""
+(__skills_path__ / "run_skill.py").write_text(__run_skill_code__)
+
+# --- __init__.py for skills ---
+__skills_init__ = """# Auto-generated skill bindings
+from .list_skills import list_skills
+from .load_skill import load_skill
+from .read_skill_resource import read_skill_resource
+from .run_skill import run_skill_script
+
+__all__ = ["list_skills", "load_skill", "read_skill_resource", "run_skill_script"]
+"""
+(__skills_path__ / "__init__.py").write_text(__skills_init__)
+
+print(f"Generated skill bindings for {{len(__skills_metadata__)}} skills in {{__skills_path__}}")
+'''
+            self._sandbox.run_code(skills_generation_code)
 
     async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
         """Call a tool through the registry.
@@ -691,7 +807,11 @@ print(f"Generated tool bindings for {{len(__tools_data__)}} tools in {{__generat
             self._tool_calls_in_run += 1
 
         try:
-            result = await self.registry.call_tool(tool_name, arguments)
+            # Route skill-prefixed calls to the skill tool caller
+            if tool_name.startswith("skills__") and self._skill_tool_caller is not None:
+                result = await self._skill_tool_caller(tool_name, arguments)
+            else:
+                result = await self.registry.call_tool(tool_name, arguments)
             execution_time = time.time() - start_time
 
             # Record in history

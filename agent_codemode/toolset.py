@@ -110,6 +110,9 @@ if PYDANTIC_AI_AVAILABLE:
         _executor: CodeModeExecutor | None = field(default=None, repr=False)
         _initialized: bool = field(default=False, repr=False)
         _codemode_call_count: int = field(default=0, repr=False)
+        _post_init_callbacks: list[Callable[["CodemodeToolset"], None]] = field(
+            default_factory=list, repr=False,
+        )
         
         def __post_init__(self):
             if self.registry is None:
@@ -119,6 +122,18 @@ if PYDANTIC_AI_AVAILABLE:
             # Default the direct-call policy from config if not provided
             if self.allow_direct_tool_calls is None:
                 self.allow_direct_tool_calls = self.config.allow_direct_tool_calls
+        
+        def add_post_init_callback(
+            self,
+            callback: Callable[["CodemodeToolset"], None],
+        ) -> None:
+            """Register a callback to run after executor initialisation.
+
+            The callback receives ``self`` (the toolset) and is invoked once,
+            at the end of ``_ensure_initialized``.  This is the right place to
+            wire skill bindings because the executor already exists.
+            """
+            self._post_init_callbacks.append(callback)
         
         @property
         def id(self) -> str | None:
@@ -154,6 +169,13 @@ if PYDANTIC_AI_AVAILABLE:
                 )
             
             self._initialized = True
+
+            # Run any registered post-init callbacks (e.g. skill wiring)
+            for cb in self._post_init_callbacks:
+                try:
+                    cb(self)
+                except Exception as exc:
+                    logger.error("Post-init callback failed: %s", exc, exc_info=True)
 
         async def start(self) -> None:
             """Start the toolset and executor."""
@@ -295,7 +317,7 @@ if PYDANTIC_AI_AVAILABLE:
             
             # Generate import hints for each server
             for server_name, funcs in by_server.items():
-                import_hints[server_name] = f"from generated.servers.{server_name} import {', '.join(funcs)}"
+                import_hints[server_name] = f"from generated.servers.mcp.{server_name} import {', '.join(funcs)}"
             
             return {
                 "tools": [t.name for t in tools],
@@ -398,7 +420,7 @@ if PYDANTIC_AI_AVAILABLE:
                         "name": s.name,
                         "description": s.description,
                         "tool_count": s.tool_count,
-                        "import_path": f"from generated.servers.{s.name} import {', '.join(server_tools.get(s.name, []))}",
+                        "import_path": f"from generated.servers.mcp.{s.name} import {', '.join(server_tools.get(s.name, []))}",
                         "functions": server_tools.get(s.name, []),
                     }
                     for s in servers
