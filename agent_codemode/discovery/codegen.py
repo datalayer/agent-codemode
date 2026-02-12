@@ -428,13 +428,33 @@ _SKILL_CATALOG = {skill_catalog_json}
 
 
 async def list_skills() -> list[dict[str, Any]]:
-    """List all available skills with their names and descriptions.
+    """List all available skills with their names, descriptions, and schemas.
 
-    Returns a list of skill metadata dictionaries. Each entry contains
-    at least ``name`` and ``description`` keys, and may include
-    ``scripts`` and ``resources``.
+    Returns a list of skill metadata dictionaries. Each entry contains:
+
+    - ``name`` (str): Skill identifier, e.g. ``"github"``
+    - ``description`` (str): What the skill does
+    - ``scripts`` (list[dict]): Available scripts, each with:
+        - ``name`` (str): Script name to pass to ``run_skill``
+        - ``description`` (str): What the script does
+        - ``parameters`` (list[dict]): CLI parameters, each with
+          ``name``, ``type``, ``description``, and optionally ``required``
+        - ``returns`` (str): Description of what the script returns
+        - ``usage`` (str): Example command line invocation
+        - ``env_vars`` (list[str]): Required environment variables
+    - ``resources`` (list[dict]): Available resource files
 
     This is a local lookup – no tool call is made.
+
+    Example::
+
+        skills = await list_skills()
+        for skill in skills:
+            print(f"Skill: {{skill['name']}}")
+            for script in skill.get("scripts", []):
+                print(f"  Script: {{script['name']}}")
+                for param in script.get("parameters", []):
+                    print(f"    --{{param['name']}} ({{param.get('type', 'str')}}): {{param.get('description', '')}}")
     """
     return _SKILL_CATALOG
 '''

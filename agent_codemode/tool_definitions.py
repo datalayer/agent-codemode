@@ -87,7 +87,22 @@ TOOL_SCHEMAS = {
         },
     },
     "execute_code": {
-        "description": "Execute Python code that composes and calls tools. Import MCP tools using: `from generated.mcp.<server_name> import <function_name>`. Import skill functions using: `from generated.skills import list_skills, load_skill, run_skill`. CRITICAL: (1) All generated tools are async - MUST use `await` when calling them. (2) ALWAYS call get_tool_details first to check parameter names and return value structure. (3) Tool return values may be dicts - extract fields before using.",
+        "description": (
+            "Execute Python code that composes and calls tools. "
+            "Import MCP tools using: `from generated.mcp.<server_name> import <function_name>`. "
+            "Import skill functions using: `from generated.skills import list_skills, load_skill, run_skill, read_skill_resource`. "
+            "CRITICAL: (1) All generated tools are async - MUST use `await` when calling them. "
+            "(2) ALWAYS call get_tool_details first to check parameter names and return value structure. "
+            "(3) Tool return values may be dicts - extract fields before using. "
+            "SKILL FUNCTIONS: "
+            "`await list_skills()` returns a list of skill dicts with name, description, "
+            "scripts (each with name, description, parameters, returns, usage, env_vars), and resources. "
+            "`await run_skill(skill_name, script_name, args)` executes a script — "
+            "`args` is a list of CLI-style strings like `['--org', 'datalayer']`; "
+            "returns a dict with keys: success, output, exit_code, error, execution_time. "
+            "`await load_skill(skill_name)` returns the full SKILL.md documentation. "
+            "`await read_skill_resource(skill_name, resource_name)` reads a resource file."
+        ),
         "parameters": {
             "type": "object",
             "required": ["code"],

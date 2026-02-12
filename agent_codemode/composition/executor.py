@@ -701,9 +701,14 @@ print(f"Generated tool bindings for {{len(__tools_data__)}} tools in {{__generat
     def generate_skills_in_sandbox(self) -> None:
         """Generate skill bindings in the remote sandbox filesystem.
 
-        This creates ``/tmp/generated/skills/`` with bindings that route
-        ``skills__*`` tool calls back through ``call_tool`` (and ultimately
-        through the HTTP proxy or local executor).
+        This creates ``/tmp/generated/skills/`` with bindings that execute
+        skill scripts **directly** in the Jupyter kernel, reading the script
+        files from the shared ``skills_path`` on disk.  This avoids the
+        HTTP proxy round-trip (call_tool → MCP proxy → agent-runtimes →
+        local-eval fallback) which caused blocking and deadlocks.
+
+        The skills_path is the same between the agent-runtimes process and
+        the Jupyter runtime (shared filesystem or mount).
 
         Can be called independently after :meth:`_generate_tools_in_sandbox`
         has already run — for example when ``wire_skills_into_codemode`` sets
@@ -716,20 +721,23 @@ print(f"Generated tool bindings for {{len(__tools_data__)}} tools in {{__generat
         if self._is_local_eval_sandbox():
             return
 
+        # The skills_path is on the shared filesystem accessible from both
+        # the agent-runtimes process and the Jupyter kernel.
+        skills_path = str(Path(self.config.skills_path).resolve())
+
         skills_generation_code = f'''
 import os
 import sys
 from pathlib import Path
 
 __skills_metadata__ = {self._skills_metadata!r}
+__skills_source_path__ = {skills_path!r}
 __generated_path__ = Path("/tmp/generated")
 __skills_path__ = __generated_path__ / "skills"
 __skills_path__.mkdir(parents=True, exist_ok=True)
 
 # --- list_skills binding ---
 # Embed the catalog directly so list_skills works without an HTTP round-trip.
-# This makes the Jupyter behaviour consistent with local-eval (on-disk)
-# bindings which also embed _SKILL_CATALOG as a constant.
 import json as _json
 __catalog_json__ = _json.dumps(__skills_metadata__, ensure_ascii=False, indent=2)
 
@@ -741,6 +749,18 @@ _SKILL_CATALOG = json.loads(CATALOG_PLACEHOLDER_TOKEN)
 
 
 async def list_skills() -> list[dict[str, Any]]:
+    \\"\\"\\"List all available skills with their names, descriptions, and schemas.
+
+    Returns a list of skill metadata dicts. Each entry contains:
+    - name (str): Skill identifier
+    - description (str): What the skill does
+    - scripts (list[dict]): Available scripts, each with name, description,
+      parameters (list of dicts with name/type/description/required),
+      returns, usage, env_vars
+    - resources (list[dict]): Available resource files
+
+    This is a local lookup - no network call is made.
+    \\"\\"\\"
     return _SKILL_CATALOG
 """
 
@@ -750,10 +770,14 @@ __list_skills_code__ = __list_skills_template__.replace(
 
 (__skills_path__ / "list_skills.py").write_text(__list_skills_code__)
 
-# --- load_skill binding ---
+# --- load_skill binding (direct file read, no proxy) ---
 __load_skill_code__ = """# Auto-generated skill binding for load_skill
+# Direct file read — no MCP proxy round-trip.
+from pathlib import Path
 from typing import Any
-from ..client import call_tool
+
+_SKILLS_PATH = SKILLS_PATH_PLACEHOLDER
+
 
 async def load_skill(skill_name: str) -> Any:
     \\"\\"\\"Load the full content and instructions for a skill.
@@ -764,14 +788,24 @@ async def load_skill(skill_name: str) -> Any:
     Returns:
         Full SKILL.md content as a string.
     \\"\\"\\"
-    return await call_tool("skills__load_skill", {{"skill_name": skill_name}})
+    skill_md = Path(_SKILLS_PATH) / skill_name / "SKILL.md"
+    if skill_md.exists():
+        return skill_md.read_text()
+    return f"Skill '{{skill_name}}' not found at {{skill_md}}"
 """
+__load_skill_code__ = __load_skill_code__.replace(
+    "SKILLS_PATH_PLACEHOLDER", repr(__skills_source_path__)
+)
 (__skills_path__ / "load_skill.py").write_text(__load_skill_code__)
 
-# --- read_skill_resource binding ---
+# --- read_skill_resource binding (direct file read, no proxy) ---
 __read_resource_code__ = """# Auto-generated skill binding for read_skill_resource
+# Direct file read — no MCP proxy round-trip.
+from pathlib import Path
 from typing import Any
-from ..client import call_tool
+
+_SKILLS_PATH = SKILLS_PATH_PLACEHOLDER
+
 
 async def read_skill_resource(skill_name: str, resource_name: str) -> Any:
     \\"\\"\\"Read a resource file from a skill.
@@ -783,28 +817,41 @@ async def read_skill_resource(skill_name: str, resource_name: str) -> Any:
     Returns:
         Resource content as a string.
     \\"\\"\\"
-    return await call_tool(
-        "skills__read_skill_resource",
-        {{"skill_name": skill_name, "resource_name": resource_name}},
-    )
+    resource_path = Path(_SKILLS_PATH) / skill_name / "resources" / resource_name
+    if resource_path.exists():
+        return resource_path.read_text()
+    return f"Resource '{{resource_name}}' not found in skill '{{skill_name}}'"
 """
+__read_resource_code__ = __read_resource_code__.replace(
+    "SKILLS_PATH_PLACEHOLDER", repr(__skills_source_path__)
+)
 (__skills_path__ / "read_skill_resource.py").write_text(__read_resource_code__)
 
-# --- run_skill binding ---
+# --- run_skill binding (direct exec, no proxy) ---
 __run_skill_code__ = """# Auto-generated skill binding for run_skill
+# Direct script execution — reads and exec()s the skill script
+# in-process, no MCP proxy round-trip.
+import io
+import json
+import sys
+import time
+import traceback
+from contextlib import redirect_stdout, redirect_stderr
+from pathlib import Path
 from typing import Any
-from ..client import call_tool
+
+_SKILLS_PATH = SKILLS_PATH_PLACEHOLDER
+
 
 async def run_skill(
     skill_name: str,
     script_name: str,
     args: list[str] | None = None,
-) -> Any:
+) -> dict[str, Any]:
     \\"\\"\\"Execute a script from a skill with arguments.
 
-    The result is a dict with keys: ``output``, ``exit_code``,
-    ``success``, ``error``, ``error_type``, ``error_value``,
-    ``error_traceback``, ``execution_time``, ``script_name``.
+    Reads the script file from the shared skills directory and exec()s
+    it directly in the kernel, capturing stdout/stderr.
 
     Args:
         skill_name: Name of the skill.
@@ -812,17 +859,67 @@ async def run_skill(
         args: Arguments to pass to the script (default: []).
 
     Returns:
-        ScriptExecutionResult dict.
+        Dict with keys: output, exit_code, success, error,
+        execution_time, script_name.
     \\"\\"\\"
-    return await call_tool(
-        "skills__run_skill_script",
-        {{
-            "skill_name": skill_name,
+    args = args or []
+    script_path = Path(_SKILLS_PATH) / skill_name / "scripts" / script_name
+    if not script_path.suffix:
+        script_path = script_path.with_suffix(".py")
+
+    if not script_path.exists():
+        return {{
+            "success": False,
+            "output": "",
+            "error": f"Script not found: {{script_path}}",
+            "exit_code": 1,
+            "execution_time": 0.0,
             "script_name": script_name,
-            "args": args or [],
-        }},
-    )
+        }}
+
+    script_content = script_path.read_text()
+
+    # Save and replace sys.argv
+    original_argv = sys.argv[:]
+    sys.argv = [str(script_path)] + args
+
+    # Capture stdout/stderr
+    capture_out = io.StringIO()
+    capture_err = io.StringIO()
+    start_time = time.time()
+    exit_code = 0
+    error = None
+
+    try:
+        with redirect_stdout(capture_out), redirect_stderr(capture_err):
+            _globals = {{"__name__": "__main__", "__file__": str(script_path)}}
+            exec(compile(script_content, str(script_path), "exec"), _globals)
+    except SystemExit as e:
+        exit_code = int(e.code) if e.code else 0
+    except Exception:
+        error = traceback.format_exc()
+        exit_code = 1
+    finally:
+        sys.argv = original_argv
+
+    execution_time = time.time() - start_time
+    stdout_text = capture_out.getvalue()
+    stderr_text = capture_err.getvalue()
+
+    return {{
+        "success": exit_code == 0 and error is None,
+        "output": stdout_text or stderr_text,
+        "stdout": stdout_text,
+        "stderr": stderr_text,
+        "error": error or (stderr_text if exit_code != 0 else None),
+        "exit_code": exit_code,
+        "execution_time": execution_time,
+        "script_name": script_name,
+    }}
 """
+__run_skill_code__ = __run_skill_code__.replace(
+    "SKILLS_PATH_PLACEHOLDER", repr(__skills_source_path__)
+)
 (__skills_path__ / "run_skill.py").write_text(__run_skill_code__)
 
 # --- __init__.py for skills ---
@@ -842,6 +939,8 @@ for mod_name in list(sys.modules.keys()):
         del sys.modules[mod_name]
 
 print(f"Generated skill bindings for {{len(__skills_metadata__)}} skills in {{__skills_path__}}")
+print(f"Skills source path: {{__skills_source_path__}}")
+print("Mode: direct execution (no MCP proxy)")
 '''
         self._sandbox.run_code(skills_generation_code)
 

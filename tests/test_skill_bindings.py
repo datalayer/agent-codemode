@@ -327,8 +327,8 @@ class TestGenerateSkillsInSandbox:
         # Should NOT contain call_tool for list_skills (embedded instead)
         assert "skills__list_skills" not in gen_code
 
-    def test_other_bindings_use_call_tool(self, tmp_path: Path):
-        """load_skill, read_skill_resource, run_skill should still use call_tool."""
+    def test_other_bindings_use_direct_execution(self, tmp_path: Path):
+        """load_skill, read_skill_resource, run_skill should use direct execution (no proxy)."""
         from agent_codemode.composition.executor import CodeModeExecutor
 
         registry = ToolRegistry()
@@ -346,10 +346,15 @@ class TestGenerateSkillsInSandbox:
         executor.generate_skills_in_sandbox()
 
         gen_code = sandbox.code_calls[-1]
-        # These should still use call_tool for HTTP proxy routing
-        assert "skills__load_skill" in gen_code
-        assert "skills__read_skill_resource" in gen_code
-        assert "skills__run_skill_script" in gen_code
+        # These should use direct file access, NOT call_tool proxy
+        assert "skills__load_skill" not in gen_code
+        assert "skills__read_skill_resource" not in gen_code
+        assert "skills__run_skill_script" not in gen_code
+        # Instead they should read files directly from the skills path
+        assert "SKILL.md" in gen_code  # load_skill reads SKILL.md
+        assert "resources" in gen_code  # read_skill_resource reads from resources/
+        assert "exec(" in gen_code  # run_skill exec()s the script directly
+        assert "_SKILLS_PATH" in gen_code  # All bindings use the skills path constant
 
 
 # ---------------------------------------------------------------------------
