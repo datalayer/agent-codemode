@@ -184,12 +184,19 @@ When you set up the executor, it generates Python modules with async functions f
 
 ```python
 # After executor.setup(), you can import tools:
-from generated.servers.filesystem import read_file, write_file, list_directory
-from generated.servers.bash import run_command
+from generated.mcp.filesystem import read_file, write_file, list_directory
+from generated.mcp.bash import run_command
+
+# If skills are wired into Codemode, skill bindings are also available:
+from generated.skills import list_skills, load_skill, run_skill
 
 # Use them as async functions
 content = await read_file({"path": "/tmp/file.txt"})
 await write_file({"path": "/tmp/out.txt", "content": content})
+
+# Discover and run skills
+skills = await list_skills({})
+result = await run_skill({"skill_name": "my-skill", "script_name": "run.py"})
 ```
 
 ### Generated Code Structure
@@ -197,17 +204,23 @@ await write_file({"path": "/tmp/out.txt", "content": content})
 ```
 generated/
 ├── __init__.py
-└── servers/
+└── mcp/
     ├── __init__.py
     ├── filesystem.py
     ├── bash.py
-    └── web.py
+    ├── web.py
+    └── skills/              # Present when skills are wired into Codemode
+        ├── __init__.py
+        ├── list_skills.py
+        ├── load_skill.py
+        ├── read_skill_resource.py
+        └── run_skill.py
 ```
 
 Each server module contains async functions matching its tools:
 
 ```python
-# generated/servers/filesystem.py
+# generated/mcp/filesystem.py
 async def read_file(params: dict) -> str:
     """Read contents of a file."""
     ...
@@ -216,6 +229,17 @@ async def write_file(params: dict) -> dict:
     """Write content to a file."""
     ...
 ```
+
+Skill bindings follow the same pattern but route through the `skills__` prefix:
+
+```python
+# generated/mcp/skills/run_skill.py
+async def run_skill(arguments: dict) -> str:
+    """Run a skill script by name."""
+    return await _call_tool("skills", "run_skill", arguments)
+```
+
+See [Skills — Generated Skill Bindings](../skills/index.mdx#generated-skill-bindings-approach-d) for details on how skill bindings are generated and routed.
 
 ## Best Practices
 

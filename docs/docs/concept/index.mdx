@@ -12,7 +12,7 @@ Agent Codemode generates **programmatic tools** from two sources:
 
 | Source | Description | Example |
 |--------|-------------|---------|
-| **MCP Servers** | Connect to any MCP server and generate typed Python bindings | `from generated.servers.filesystem import read_file` |
+| **MCP Servers** | Connect to any MCP server and generate typed Python bindings | `from generated.mcp.filesystem import read_file` |
 | **Skills** | Reusable code patterns that compose multiple tools | `from skills.batch_process import batch_process` |
 
 These programmatic tools can then be:
@@ -75,7 +75,7 @@ print(registry.tool_count)  # e.g., 15 tools
 Agent Codemode generates Python code that wraps MCP tools:
 
 ```python
-# Generated: generated/servers/filesystem.py
+# Generated: generated/mcp/filesystem.py
 async def read_file(arguments: dict) -> str:
     """Read file contents.
     
@@ -91,7 +91,7 @@ async def read_file(arguments: dict) -> str:
 Agents import these bindings in their code:
 
 ```python
-from generated.servers.filesystem import read_file, write_file
+from generated.mcp.filesystem import read_file, write_file
 ```
 
 ### Code Executor
@@ -105,7 +105,7 @@ executor = CodeModeExecutor(registry)
 await executor.setup()
 
 result = await executor.execute("""
-    from generated.servers.filesystem import read_file
+    from generated.mcp.filesystem import read_file
     content = await read_file({"path": "/data.txt"})
     print(f"Read {len(content)} bytes")
 """)
@@ -118,7 +118,7 @@ Skills are saved code patterns that can be reused:
 ```python
 # skills/word_count.py
 async def word_count(path: str) -> int:
-    from generated.servers.filesystem import read_file
+    from generated.mcp.filesystem import read_file
     content = await read_file({"path": path})
     return len(content.split())
 ```
@@ -127,6 +127,26 @@ Agents can:
 1. Discover existing skills
 2. Use skills in their code
 3. Create new skills from successful code
+
+### Generated Skill Bindings
+
+When skills are wired into Codemode (see [Skills — Approach D](../skills/index.mdx#generated-skill-bindings-approach-d)), skill operations are also exposed as generated bindings under `generated/mcp/skills/`:
+
+```python
+from generated.skills import list_skills, load_skill, run_skill
+
+# Discover skills
+skills = await list_skills({})
+
+# Run a skill script
+result = await run_skill({
+    "skill_name": "pdf-extractor",
+    "script_name": "extract.py",
+    "args": {"path": "/data/report.pdf"}
+})
+```
+
+This means agents can compose both MCP tools and skills in the same Python code block, using a uniform `from generated.mcp.X import Y` pattern. Skill calls are routed through the executor via the `skills__` prefix (e.g., `skills__run_skill`) to the underlying `AgentSkillsToolset`.
 
 ## Execution Model
 
@@ -205,22 +225,25 @@ Code Mode offers the flexibility of traditional agents with the efficiency of pr
           │                │                │
           v                v                v
 ┌─────────────────────────────────────────────────────────┐
-│                   Agent Codemode                           │
+│                   Agent Codemode                         │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐      │
 │  │Tool Registry│  │  Executor   │  │Skill Manager│      │
-│  └──────┬──────┘  └──────┬──────┘  └─────────────┘      │
-│         │                │                               │
-│         v                v                               │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘      │
+│         │                │                │              │
+│         v                v                v              │
 │  ┌─────────────────────────────────────────────┐        │
 │  │            Generated Bindings                │        │
-│  │  from generated.servers.X import tool       │        │
-│  └──────────────────────┬──────────────────────┘        │
-└─────────────────────────┼───────────────────────────────┘
-                          │
-          ┌───────────────┼───────────────┐
-          v               v               v
-    ┌──────────┐   ┌──────────┐   ┌──────────┐
-    │MCP Server│   │MCP Server│   │MCP Server│
-    │filesystem│   │   web    │   │ database │
-    └──────────┘   └──────────┘   └──────────┘
+│  │  from generated.mcp.X import tool       │        │
+│  │  from generated.skills import ...       │        │
+│  └────────┬─────────────────────────┬──────────┘        │
+└───────────┼─────────────────────────┼───────────────────┘
+            │                         │
+  ┌─────────┼───────────┐            │
+  v         v           v            v
+┌────────┐┌────────┐┌────────┐ ┌──────────────┐
+│MCP Svr ││MCP Svr ││MCP Svr │ │AgentSkills   │
+│filesys ││  web   ││database│ │Toolset       │
+└────────┘└────────┘└────────┘ │(list, load,  │
+                               │ run, read)   │
+                               └──────────────┘
 ```

@@ -182,7 +182,7 @@ class CodeModeConfig(BaseModel):
         max_tool_calls: Optional safety cap for tool calls per execute() run.
         skills_directories: Directories to scan for skill definitions.
             When non-empty, the code generator produces skill bindings under
-            ``generated/servers/skills/`` so that execute_code can import and
+            ``generated/skills/`` so that execute_code can import and
             compose skills alongside MCP tools.
         mcp_proxy_url: URL for the MCP tool proxy endpoint.
             When set, remote sandboxes (Jupyter, Docker) will call tools via

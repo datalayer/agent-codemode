@@ -87,7 +87,7 @@ TOOL_SCHEMAS = {
         },
     },
     "execute_code": {
-        "description": "Execute Python code that composes and calls tools. Import MCP tools using: `from generated.servers.mcp.<server_name> import <function_name>`. Import skill functions using: `from generated.servers.skills import list_skills, load_skill, run_skill`. CRITICAL: (1) All generated tools are async - MUST use `await` when calling them. (2) ALWAYS call get_tool_details first to check parameter names and return value structure. (3) Tool return values may be dicts - extract fields before using.",
+        "description": "Execute Python code that composes and calls tools. Import MCP tools using: `from generated.mcp.<server_name> import <function_name>`. Import skill functions using: `from generated.skills import list_skills, load_skill, run_skill`. CRITICAL: (1) All generated tools are async - MUST use `await` when calling them. (2) ALWAYS call get_tool_details first to check parameter names and return value structure. (3) Tool return values may be dicts - extract fields before using.",
         "parameters": {
             "type": "object",
             "required": ["code"],

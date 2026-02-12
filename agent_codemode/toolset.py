@@ -317,8 +317,16 @@ if PYDANTIC_AI_AVAILABLE:
             
             # Generate import hints for each server
             for server_name, funcs in by_server.items():
-                import_hints[server_name] = f"from generated.servers.mcp.{server_name} import {', '.join(funcs)}"
+                import_hints[server_name] = f"from generated.mcp.{server_name} import {', '.join(funcs)}"
             
+            # Add skills import hint if skills are available
+            executor = getattr(self, "_executor", None)
+            if executor and getattr(executor, "_skills_metadata", None):
+                import_hints["skills"] = (
+                    "from generated.skills import list_skills, load_skill, "
+                    "read_skill_resource, run_skill"
+                )
+
             return {
                 "tools": [t.name for t in tools],
                 "by_server": by_server,
@@ -414,18 +422,32 @@ if PYDANTIC_AI_AVAILABLE:
                 func_name = tool.name.split("__")[-1].replace("-", "_")
                 server_tools[sname].append(func_name)
             
+            server_entries = [
+                {
+                    "name": s.name,
+                    "description": s.description,
+                    "tool_count": s.tool_count,
+                    "import_path": f"from generated.mcp.{s.name} import {', '.join(server_tools.get(s.name, []))}",
+                    "functions": server_tools.get(s.name, []),
+                }
+                for s in servers
+            ]
+
+            # Include skills module if skills are available
+            executor = getattr(self, "_executor", None)
+            if executor and getattr(executor, "_skills_metadata", None):
+                skill_funcs = ["list_skills", "load_skill", "read_skill_resource", "run_skill"]
+                server_entries.append({
+                    "name": "skills",
+                    "description": "Agent skills – reusable task scripts",
+                    "tool_count": len(skill_funcs),
+                    "import_path": f"from generated.skills import {', '.join(skill_funcs)}",
+                    "functions": skill_funcs,
+                })
+
             return {
-                "servers": [
-                    {
-                        "name": s.name,
-                        "description": s.description,
-                        "tool_count": s.tool_count,
-                        "import_path": f"from generated.servers.mcp.{s.name} import {', '.join(server_tools.get(s.name, []))}",
-                        "functions": server_tools.get(s.name, []),
-                    }
-                    for s in servers
-                ],
-                "total": len(servers),
+                "servers": server_entries,
+                "total": len(server_entries),
                 "usage_hint": "Use the import_path to import tools in execute_code",
             }
         

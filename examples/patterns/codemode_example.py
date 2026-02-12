@@ -101,7 +101,7 @@ async def example_code_execution():
 import os
 
 # In production, you would import generated tool bindings:
-# from generated.servers.filesystem import read_file, write_file
+# from generated.mcp.filesystem import read_file, write_file
 
 # Create a sample data processing workflow
 data = {"files_processed": 0, "total_size": 0}

@@ -75,7 +75,7 @@ class CodeModeExecutor:
         await executor.setup()
 
         result = await executor.execute('''
-            from generated.servers.mcp.bash import ls, cat
+            from generated.mcp.bash import ls, cat
 
             files = await ls({"path": "/tmp"})
             for file in files["entries"]:
@@ -126,7 +126,7 @@ class CodeModeExecutor:
 
         When a remote/Jupyter sandbox is used, the executor regenerates
         tool bindings inside the sandbox.  This metadata is used to also
-        generate ``servers/skills/`` bindings there.
+        generate ``skills/`` bindings there.
 
         Called by ``wire_skills_into_codemode`` in agent_factory.
         """
@@ -199,10 +199,10 @@ class CodeModeExecutor:
         is_local_eval = self._is_local_eval_sandbox()
         if not is_local_eval:
             await self._generate_tools_in_sandbox()
-            # Use /tmp so 'from generated.servers...' works (files are at /tmp/generated/)
+            # Use /tmp so 'from generated.mcp...' works (files are at /tmp/generated/)
             sandbox_generated_path = "/tmp"
         else:
-            # For local-eval, use the parent directory so 'from generated.servers...' works
+            # For local-eval, use the parent directory so 'from generated.mcp...' works
             # The generated_path might be './generated', we need its parent on sys.path
             sandbox_generated_path = str(generated_path.parent)
 
@@ -510,10 +510,9 @@ from typing import Any
 # Tool data from the registry
 __tools_data__ = {tools_data!r}
 
-# Output path in sandbox - use /tmp/generated so 'from generated.servers...' works
+# Output path in sandbox - use /tmp/generated so 'from generated.mcp...' works
 __generated_path__ = Path("/tmp/generated")
-__servers_path__ = __generated_path__ / "servers"
-__mcp_path__ = __servers_path__ / "mcp"
+__mcp_path__ = __generated_path__ / "mcp"
 
 def _sanitize_name(name: str) -> str:
     """Sanitize a name to be a valid Python identifier."""
@@ -550,7 +549,6 @@ def _schema_to_type_hint(schema: dict) -> str:
 
 # Create directory structure
 __generated_path__.mkdir(parents=True, exist_ok=True)
-__servers_path__.mkdir(parents=True, exist_ok=True)
 __mcp_path__.mkdir(parents=True, exist_ok=True)
 
 # Generate client module
@@ -650,7 +648,7 @@ for server_name, tools_list in __server_tools__.items():
         # Generate tool file
         tool_code = f"""# Auto-generated tool binding for {{tool_name}}
 from typing import Any, Optional
-from ....client import call_tool
+from ...client import call_tool
 
 async def {{func_name}}(arguments: Optional[{{input_type}}] = None, **kwargs: Any) -> {{output_type}}:
     \\"\\"\\"{{description}}\\"\\"\\"
@@ -683,9 +681,6 @@ __all__ = ["call_tool", "set_tool_caller"]
 """
 (__generated_path__ / "__init__.py").write_text(__main_index__)
 
-# Generate servers namespace package (supports mcp/ and skills/ sub-packages)
-(__servers_path__ / "__init__.py").write_text("# Namespace package for mcp and skills sub-packages\n")
-
 # Generate MCP servers index
 __server_names__ = list(__server_tools__.keys())
 __mcp_index__ = f"""# Auto-generated MCP servers index
@@ -701,19 +696,40 @@ print(f"Generated tool bindings for {{len(__tools_data__)}} tools in {{__generat
 
         # Generate skill bindings in the sandbox if skills metadata is available
         if self._skills_metadata:
-            skills_generation_code = f'''
+            self.generate_skills_in_sandbox()
+
+    def generate_skills_in_sandbox(self) -> None:
+        """Generate skill bindings in the remote sandbox filesystem.
+
+        This creates ``/tmp/generated/skills/`` with bindings that route
+        ``skills__*`` tool calls back through ``call_tool`` (and ultimately
+        through the HTTP proxy or local executor).
+
+        Can be called independently after :meth:`_generate_tools_in_sandbox`
+        has already run — for example when ``wire_skills_into_codemode`` sets
+        the skills metadata *after* initial sandbox setup.
+        """
+        if self._sandbox is None or not self._skills_metadata:
+            return
+
+        # Skip for local-eval sandboxes (they use the on-disk generated files)
+        if self._is_local_eval_sandbox():
+            return
+
+        skills_generation_code = f'''
 import os
+import sys
 from pathlib import Path
 
 __skills_metadata__ = {self._skills_metadata!r}
 __generated_path__ = Path("/tmp/generated")
-__skills_path__ = __generated_path__ / "servers" / "skills"
+__skills_path__ = __generated_path__ / "skills"
 __skills_path__.mkdir(parents=True, exist_ok=True)
 
 # --- list_skills binding ---
 __list_skills_code__ = """# Auto-generated skill binding for list_skills
 from typing import Any, Optional
-from ...client import call_tool
+from ..client import call_tool
 
 async def list_skills(arguments: Optional[dict[str, Any]] = None, **kwargs: Any) -> Any:
     \\"\\"\\"List all available skills and their descriptions.\\"\\"\\"
@@ -728,7 +744,7 @@ async def list_skills(arguments: Optional[dict[str, Any]] = None, **kwargs: Any)
 # --- load_skill binding ---
 __load_skill_code__ = """# Auto-generated skill binding for load_skill
 from typing import Any, Optional
-from ...client import call_tool
+from ..client import call_tool
 
 async def load_skill(arguments: Optional[dict[str, Any]] = None, **kwargs: Any) -> Any:
     \\"\\"\\"Load a skill by name and return its full description, scripts, and resources.\\"\\"\\"
@@ -743,7 +759,7 @@ async def load_skill(arguments: Optional[dict[str, Any]] = None, **kwargs: Any) 
 # --- read_skill_resource binding ---
 __read_resource_code__ = """# Auto-generated skill binding for read_skill_resource
 from typing import Any, Optional
-from ...client import call_tool
+from ..client import call_tool
 
 async def read_skill_resource(arguments: Optional[dict[str, Any]] = None, **kwargs: Any) -> Any:
     \\"\\"\\"Read a resource file from a skill.\\"\\"\\"
@@ -756,11 +772,11 @@ async def read_skill_resource(arguments: Optional[dict[str, Any]] = None, **kwar
 (__skills_path__ / "read_skill_resource.py").write_text(__read_resource_code__)
 
 # --- run_skill binding ---
-__run_skill_code__ = """# Auto-generated skill binding for run_skill_script
+__run_skill_code__ = """# Auto-generated skill binding for run_skill
 from typing import Any, Optional
-from ...client import call_tool
+from ..client import call_tool
 
-async def run_skill_script(arguments: Optional[dict[str, Any]] = None, **kwargs: Any) -> Any:
+async def run_skill(arguments: Optional[dict[str, Any]] = None, **kwargs: Any) -> Any:
     \\"\\"\\"Run a script from a skill.\\"\\"\\"
     if arguments is None:
         arguments = kwargs
@@ -775,15 +791,20 @@ __skills_init__ = """# Auto-generated skill bindings
 from .list_skills import list_skills
 from .load_skill import load_skill
 from .read_skill_resource import read_skill_resource
-from .run_skill import run_skill_script
+from .run_skill import run_skill
 
-__all__ = ["list_skills", "load_skill", "read_skill_resource", "run_skill_script"]
+__all__ = ["list_skills", "load_skill", "read_skill_resource", "run_skill"]
 """
 (__skills_path__ / "__init__.py").write_text(__skills_init__)
 
+# Clear stale generated.skills module cache so re-import picks up new files
+for mod_name in list(sys.modules.keys()):
+    if mod_name == "generated.skills" or mod_name.startswith("generated.skills."):
+        del sys.modules[mod_name]
+
 print(f"Generated skill bindings for {{len(__skills_metadata__)}} skills in {{__skills_path__}}")
 '''
-            self._sandbox.run_code(skills_generation_code)
+        self._sandbox.run_code(skills_generation_code)
 
     async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
         """Call a tool through the registry.
@@ -872,8 +893,8 @@ print(f"Generated skill bindings for {{len(__skills_metadata__)}} skills in {{__
             identity_env = _get_identity_env()
             
             # Get the generated path for sys.path setup
-            # For remote sandboxes, use /tmp so 'from generated.servers...' works (files at /tmp/generated/)
-            # For local-eval, use parent of generated_path so 'from generated.servers...' works
+            # For remote sandboxes, use /tmp so 'from generated.mcp...' works (files at /tmp/generated/)
+            # For local-eval, use parent of generated_path so 'from generated.mcp...' works
             # Use actual sandbox type detection, not config
             is_local_eval = self._is_local_eval_sandbox()
             if not is_local_eval:

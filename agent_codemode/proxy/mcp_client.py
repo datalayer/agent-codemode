@@ -98,13 +98,14 @@ class MCPClient:
         if self._stdio_session is not None:
             return self._stdio_session
 
+        import os as _os
         from mcp.client.session import ClientSession
         from mcp.client.stdio import StdioServerParameters, stdio_client
 
         params = StdioServerParameters(
             command=self.command,
             args=self.args,
-            env=self.env or None,
+            env={**_os.environ, **self.env} if self.env else None,
         )
         self._stdio_ctx = stdio_client(params)
         read_stream, write_stream = await self._stdio_ctx.__aenter__()

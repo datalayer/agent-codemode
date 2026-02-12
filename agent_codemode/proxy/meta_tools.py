@@ -61,7 +61,7 @@ class MetaToolProvider:
         
         # Execute code
         result = await provider.execute_code('''
-            from generated.servers.filesystem import read_file
+            from generated.mcp.filesystem import read_file
             content = await read_file({"path": "data.csv"})
             print(content[:100])
         ''')
@@ -375,7 +375,7 @@ class MetaToolProvider:
                             "type": "string",
                             "description": (
                                 "Python code to execute. Can use async/await "
-                                "and import from generated.servers.*"
+                                "and import from generated.mcp.*"
                             ),
                         },
                         "timeout": {

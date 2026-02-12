@@ -38,7 +38,7 @@ async def main():
     
     print("\n=== Executing code ===")
     code = """
-from generated.servers.example_mcp import generate_random_text
+from generated.mcp.example_mcp import generate_random_text
 
 try:
     result = await generate_random_text({'word_count': 50})

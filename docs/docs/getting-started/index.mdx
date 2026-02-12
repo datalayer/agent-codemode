@@ -80,7 +80,7 @@ Now you can run code that composes MCP tools:
 
 ```python
 result = await executor.execute("""
-    from generated.servers.filesystem import read_file, write_file
+    from generated.mcp.filesystem import read_file, write_file
     
     # Read a file
     content = await read_file({"path": "/tmp/input.txt"})
@@ -123,7 +123,7 @@ async def main():
     
     # Execute code
     result = await executor.execute("""
-        from generated.servers.filesystem import list_directory, read_file
+        from generated.mcp.filesystem import list_directory, read_file
         import asyncio
         
         # List files
@@ -183,7 +183,7 @@ You CANNOT directly call tools - you must write code that imports and uses the g
 
 Simple tool call:
 ```python
-from generated.servers.filesystem import read_file
+from generated.mcp.filesystem import read_file
 content = await read_file({"path": "/data/config.json"})
 print(content)
 ```
@@ -191,7 +191,7 @@ print(content)
 Parallel operations:
 ```python
 import asyncio
-from generated.servers.filesystem import read_file
+from generated.mcp.filesystem import read_file
 
 files = ["/data/a.txt", "/data/b.txt", "/data/c.txt"]
 contents = await asyncio.gather(*[read_file({"path": f}) for f in files])
@@ -201,7 +201,7 @@ for f, c in zip(files, contents):
 
 Error handling:
 ```python
-from generated.servers.filesystem import read_file, write_file
+from generated.mcp.filesystem import read_file, write_file
 
 try:
     content = await read_file({"path": "/data/input.txt"})

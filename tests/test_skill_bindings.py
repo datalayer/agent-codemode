@@ -72,7 +72,7 @@ class TestGenerateSkillBindings:
         codegen = PythonCodeGenerator(str(generated_dir))
         codegen.generate_skill_bindings(SAMPLE_SKILLS_METADATA)
 
-        skills_dir = generated_dir / "servers" / "skills"
+        skills_dir = generated_dir / "skills"
         assert skills_dir.is_dir()
 
         expected_files = [
@@ -89,7 +89,7 @@ class TestGenerateSkillBindings:
         codegen = PythonCodeGenerator(str(generated_dir))
         codegen.generate_skill_bindings(SAMPLE_SKILLS_METADATA)
 
-        source = (generated_dir / "servers" / "skills" / "list_skills.py").read_text()
+        source = (generated_dir / "skills" / "list_skills.py").read_text()
         # The catalog JSON should be embedded
         assert "pdf-extractor" in source
         assert "csv-analyzer" in source
@@ -99,14 +99,14 @@ class TestGenerateSkillBindings:
         codegen.generate_skill_bindings(SAMPLE_SKILLS_METADATA)
 
         for fname in ["load_skill.py", "read_skill_resource.py", "run_skill.py"]:
-            source = (generated_dir / "servers" / "skills" / fname).read_text()
-            assert "from ...client import call_tool" in source
+            source = (generated_dir / "skills" / fname).read_text()
+            assert "from ..client import call_tool" in source
 
     def test_init_exports_all_functions(self, generated_dir: Path):
         codegen = PythonCodeGenerator(str(generated_dir))
         codegen.generate_skill_bindings(SAMPLE_SKILLS_METADATA)
 
-        init_src = (generated_dir / "servers" / "skills" / "__init__.py").read_text()
+        init_src = (generated_dir / "skills" / "__init__.py").read_text()
         for fn in ["list_skills", "load_skill", "read_skill_resource", "run_skill"]:
             assert fn in init_src
 
@@ -294,7 +294,7 @@ class TestCodegenImportRoundTrip:
                 del sys.modules[mod]
 
         try:
-            from generated.servers.skills.list_skills import list_skills
+            from generated.skills.list_skills import list_skills
 
             result = await list_skills()
             assert isinstance(result, list)
@@ -321,7 +321,7 @@ class TestCodegenImportRoundTrip:
 
         try:
             from generated.client import set_tool_caller
-            from generated.servers.skills.load_skill import load_skill
+            from generated.skills.load_skill import load_skill
 
             calls = []
 
@@ -358,7 +358,7 @@ class TestCodegenImportRoundTrip:
 
         try:
             from generated.client import set_tool_caller
-            from generated.servers.skills.run_skill import run_skill
+            from generated.skills.run_skill import run_skill
 
             calls = []
 

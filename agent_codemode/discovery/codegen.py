@@ -28,7 +28,7 @@ class PythonCodeGenerator:
         generator.generate_from_tools({"bash__ls": tool_def, "bash__cat": tool_def})
 
         # Generated code can be imported:
-        # from generated.servers.bash import ls, cat
+        # from generated.mcp.bash import ls, cat
         # result = await ls({"path": "/tmp"})
     """
 
@@ -39,8 +39,7 @@ class PythonCodeGenerator:
             output_path: Directory to write generated code.
         """
         self.output_path = Path(output_path)
-        self.servers_path = self.output_path / "servers"
-        self.mcp_path = self.servers_path / "mcp"
+        self.mcp_path = self.output_path / "mcp"
 
     def generate_from_tools(self, tools: dict[str, ToolDefinition]) -> None:
         """Generate Python bindings for all tools.
@@ -58,7 +57,6 @@ class PythonCodeGenerator:
 
         # Create directory structure
         self.output_path.mkdir(parents=True, exist_ok=True)
-        self.servers_path.mkdir(parents=True, exist_ok=True)
         self.mcp_path.mkdir(parents=True, exist_ok=True)
         logger.info(
             "Generating MCP bindings to %s (mcp dir: %s)",
@@ -256,7 +254,7 @@ async def call_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
 """Tool: {tool.name}"""
 
 from typing import Any, Optional
-from ....client import call_tool
+from ...client import call_tool
 
 
 async def {func_name}(
@@ -279,7 +277,7 @@ async def {func_name}(
 """Tool: {tool.name}"""
 
 from typing import Any, Optional
-from ....client import call_tool
+from ...client import call_tool
 
 
 async def {func_name}(arguments: Optional[{input_type}] = None, **kwargs: Any) -> {output_type}:
@@ -349,11 +347,11 @@ __all__ = [
 """Generated tool bindings.
 
 Import MCP tools from server modules:
-    from generated.servers.mcp.bash import ls, cat
-    from generated.servers.mcp.computer import screenshot
+    from generated.mcp.bash import ls, cat
+    from generated.mcp.computer import screenshot
 
 Import skill tools (when skills are enabled):
-    from generated.servers.skills import list_skills, run_skill
+    from generated.skills import list_skills, run_skill
 """
 
 from .client import call_tool, set_tool_caller
@@ -367,19 +365,7 @@ __all__ = [
         index_path = self.output_path / "__init__.py"
         index_path.write_text(code)
 
-        # Create servers/__init__.py (namespace package for mcp/ and skills/)
-        servers_index = '''# Auto-generated servers index
-# Copyright (c) 2025-2026 Datalayer, Inc.
-# BSD 3-Clause License
-
-"""Server modules (mcp and skills)."""
-
-__all__: list[str] = []
-'''
-        servers_index_path = self.servers_path / "__init__.py"
-        servers_index_path.write_text(servers_index)
-
-        # Create servers/mcp/__init__.py with MCP server imports
+        # Create mcp/__init__.py with MCP server imports
         mcp_index = f'''# Auto-generated MCP servers index
 # Copyright (c) 2025-2026 Datalayer, Inc.
 # BSD 3-Clause License
@@ -415,7 +401,7 @@ __all__ = {server_names!r}
                 ``name``, ``description``, and optionally ``scripts``
                 and ``resources``.
         """
-        skills_dir = self.servers_path / "skills"
+        skills_dir = self.output_path / "skills"
         skills_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info(
@@ -436,7 +422,7 @@ __all__ = {server_names!r}
 """List all available skills."""
 
 from typing import Any
-from ...client import call_tool
+from ..client import call_tool
 
 _SKILL_CATALOG = {skill_catalog_json}
 
@@ -462,7 +448,7 @@ async def list_skills() -> list[dict[str, Any]]:
 """Load full skill content."""
 
 from typing import Any
-from ...client import call_tool
+from ..client import call_tool
 
 
 async def load_skill(skill_name: str) -> Any:
@@ -486,7 +472,7 @@ async def load_skill(skill_name: str) -> Any:
 """Read a skill resource."""
 
 from typing import Any
-from ...client import call_tool
+from ..client import call_tool
 
 
 async def read_skill_resource(skill_name: str, resource_name: str) -> Any:
@@ -514,7 +500,7 @@ async def read_skill_resource(skill_name: str, resource_name: str) -> Any:
 """Run a skill script."""
 
 from typing import Any
-from ...client import call_tool
+from ..client import call_tool
 
 
 async def run_skill(
@@ -556,7 +542,7 @@ async def run_skill(
 
 Example::
 
-    from generated.servers.skills import list_skills, run_skill
+    from generated.skills import list_skills, run_skill
 
     skills = await list_skills()
     result = await run_skill("pdf-extractor", "extract", ["report.pdf"])

@@ -127,7 +127,7 @@ async def example_code_execution():
     # Example code the agent would write and execute
     example_code = '''
 # The agent writes code like this:
-from generated.servers.filesystem import read_file, write_file, list_directory
+from generated.mcp.filesystem import read_file, write_file, list_directory
 
 async def process_files():
     """Process multiple files efficiently."""

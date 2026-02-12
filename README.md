@@ -107,7 +107,7 @@ await registry.discover_all()
 # Execute code that composes tools
 async with CodeModeExecutor(registry) as executor:
     result = await executor.execute("""
-        from generated.servers.filesystem import read_file, write_file
+        from generated.mcp.filesystem import read_file, write_file
         
         # Read multiple files
         content1 = await read_file({"path": "/tmp/file1.txt"})
@@ -149,7 +149,7 @@ Execute Python code in an isolated sandbox with auto-generated tool bindings:
 async with CodeModeExecutor(registry) as executor:
     execution = await executor.execute("""
         import asyncio
-        from generated.servers.filesystem import ls, read_file
+        from generated.mcp.filesystem import ls, read_file
         
         # List all files
         files = await ls({"path": "/data"})
@@ -194,7 +194,7 @@ async def batch_process(input_dir: str, output_dir: str) -> dict:
     Returns:
         Processing statistics.
     """
-    from generated.servers.filesystem import list_directory, read_file, write_file
+    from generated.mcp.filesystem import list_directory, read_file, write_file
     
     entries = await list_directory({"path": input_dir})
     processed = 0
@@ -397,7 +397,7 @@ You are an AI assistant with access to MCP tools via Code Mode.
 ALL tool execution must go through execute_code. Write Python code that imports 
 and uses the generated tool bindings:
 
-from generated.servers.filesystem import read_file
+from generated.mcp.filesystem import read_file
 content = await read_file({"path": "/data/config.json"})
 print(content)
 ```
@@ -405,7 +405,7 @@ print(content)
 ## Workflow
 
 1. Discover tools using search_tools or list_tool_names
-2. Write Python code that imports tools from generated.servers.<name>
+2. Write Python code that imports tools from generated.mcp.<name>
 3. Execute using execute_code
 
 
@@ -444,7 +444,7 @@ When running in a sandbox, state can persist between `execute_code` calls within
 │                              │                                      │
 │              ┌───────────────┴───────────────┐                      │
 │              │        Generated Bindings     │                      │
-│              │  generated/servers/<name>.py  │                      │
+│              │  generated/mcp/<name>/        │                      │
 │              └───────────────────────────────┘                      │
 ├────────────────────────────────┬────────────────────────────────────┤
 │          MCP Servers           │      Agent Skills (agent_skills)   │
