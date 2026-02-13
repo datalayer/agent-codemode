@@ -644,8 +644,28 @@ __all__ = [
         else:
             return "Any"
 
+    @staticmethod
+    def _has_doc_sections(text: str) -> bool:
+        """Check whether *text* already contains Google-style doc sections.
+
+        Returns True if an ``Args:``, ``Returns:``, ``Raises:`` or
+        ``Yields:`` header is found.
+        """
+        import re
+
+        return bool(
+            re.search(r"^\s*(Args|Returns|Raises|Yields)\s*:", text, re.MULTILINE)
+        )
+
     def _generate_docstring(self, tool: ToolDefinition) -> str:
         """Generate a docstring for a tool function.
+
+        If the upstream MCP tool description already contains Args/Returns
+        sections we use it verbatim — those describe the real tool behaviour
+        and are more informative than the generic wrapper signature.
+
+        Only when the description lacks those sections do we generate them
+        from the tool's input/output schema.
 
         Args:
             tool: Tool definition.
@@ -653,22 +673,27 @@ __all__ = [
         Returns:
             Docstring content.
         """
-        lines = [tool.description or f"Call {tool.name} tool."]
+        description = tool.description or f"Call {tool.name} tool."
+
+        # If the upstream description already documents Args / Returns,
+        # use it as-is to avoid incoherent duplication.
+        if self._has_doc_sections(description):
+            return description
+
+        # Otherwise build our own Args / Returns sections from the schema.
+        lines = [description]
         lines.append("")
         lines.append("Args:")
-        lines.append("    arguments: Tool input arguments.")
 
         params = tool.parameters
         if params:
-            lines.append("")
-            lines.append("Input schema properties:")
             for param in params:
                 req = " (required)" if param.required else ""
-                lines.append(f"    - {param.name}: {param.type}{req}")
-                if param.description:
-                    lines.append(f"      {param.description}")
+                desc = f" — {param.description}" if param.description else ""
+                lines.append(f"    {param.name} ({param.type}{req}){desc}")
+        else:
+            lines.append("    arguments: Tool input arguments.")
 
-        lines.append("")
         if tool.input_examples:
             import json
 

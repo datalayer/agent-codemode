@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ToolParameter(BaseModel):
@@ -60,6 +60,28 @@ class ToolDefinition(BaseModel):
     defer_loading: bool = False
     server_name: str = ""
     server_url: str = ""
+
+    @model_validator(mode="after")
+    def _unwrap_fastmcp_output_schema(self) -> "ToolDefinition":
+        """Unwrap FastMCP's artificial ``x-fastmcp-wrap-result`` wrapper.
+
+        FastMCP wraps simple return types (e.g. ``str``) in an object schema
+        like ``{"type": "object", "properties": {"result": {"type": "string"}},
+        "x-fastmcp-wrap-result": true}``.  This is a protocol-level detail that
+        doesn't reflect what the tool *actually* returns at runtime (the plain
+        inner type).  Unwrap it so every consumer sees the real schema.
+        """
+        schema = self.output_schema
+        if (
+            schema
+            and schema.get("x-fastmcp-wrap-result")
+            and schema.get("type") == "object"
+        ):
+            props = schema.get("properties", {})
+            if "result" in props:
+                # Replace with the inner type schema
+                self.output_schema = props["result"]
+        return self
 
     @property
     def parameters(self) -> list[ToolParameter]:
