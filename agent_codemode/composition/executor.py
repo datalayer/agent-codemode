@@ -1181,8 +1181,15 @@ async def __user_code__():
                 context_id=self._sandbox._default_context.id,
             )
         else:
-            # For sync code, use sandbox's run_code
-            result = self._sandbox.run_code(code, timeout=timeout)
+            # For sync code, run in a worker thread so FastAPI's event loop
+            # stays responsive (e.g. sandbox status WS can emit is_executing).
+            import asyncio
+
+            result = await asyncio.to_thread(
+                self._sandbox.run_code,
+                code,
+                timeout=timeout,
+            )
         
         return result
 
