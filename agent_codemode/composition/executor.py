@@ -1264,10 +1264,10 @@ except (ImportError, NameError) as e:
         Returns:
             Execution result.
         """
-        from agent_skills.simple import SimpleSkillsManager
+        from agent_skills import SkillsManager
 
-        manager = SimpleSkillsManager(self.config.skills_path)
-        skill = manager.load_skill(skill_name)
+        manager = SkillsManager(self.config.skills_path)
+        skill = manager.get(skill_name)
 
         if skill is None:
             raise ValueError(f"Skill not found: {skill_name}")
@@ -1277,7 +1277,7 @@ except (ImportError, NameError) as e:
             for name, value in arguments.items():
                 self._sandbox.set_variable(name, value)
 
-        return await self.execute(skill.code)
+        return await self.execute(skill.python_code or skill.content)
 
     @property
     def tool_call_history(self) -> list[ToolCallResult]:

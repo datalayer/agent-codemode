@@ -365,27 +365,18 @@ async def handle_call_tool(arguments: dict[str, Any]) -> dict[str, Any]:
 
 async def handle_save_skill(arguments: dict[str, Any]) -> dict[str, Any]:
     """Save a reusable skill (code-based tool composition)."""
-    from agent_skills.simple import SimpleSkill, SimpleSkillsManager
+    from agent_skills import SkillsManager
     
     name = arguments["name"]
     code = arguments["code"]
     description = arguments["description"]
     tags = arguments.get("tags", [])
-    parameters = arguments.get("parameters", {})
 
     config = _config or CodeModeConfig()
-    manager = SimpleSkillsManager(config.skills_path)
-    
-    skill = SimpleSkill(
-        name=name,
-        description=description,
-        code=code,
-        tags=tags,
-        parameters=parameters,
-    )
+    manager = SkillsManager(config.skills_path)
     
     try:
-        manager.save_skill(skill=skill)
+        manager.create(name=name, description=description, content=code, python_code=code, tags=tags)
         return {
             "success": True,
             "skill_id": name,
@@ -442,25 +433,21 @@ async def handle_run_skill(arguments: dict[str, Any]) -> dict[str, Any]:
 
 async def handle_list_skills(arguments: dict[str, Any]) -> dict[str, Any]:
     """List available skills."""
-    from agent_skills.simple import SimpleSkillsManager
+    from agent_skills import SkillsManager
     
     tags = arguments.get("tags")
 
     config = _config or CodeModeConfig()
-    manager = SimpleSkillsManager(config.skills_path)
+    manager = SkillsManager(config.skills_path)
     
-    skills = manager.list_skills()
-    
-    # Filter by tags if specified
-    if tags:
-        skills = [s for s in skills if any(t in s.tags for t in tags)]
+    skills = manager.list(tags=tags)
     
     return {
         "skills": [
             {
                 "name": s.name,
                 "description": s.description,
-                "tags": s.tags,
+                "tags": s.metadata.tags,
             }
             for s in skills
         ],
@@ -470,14 +457,15 @@ async def handle_list_skills(arguments: dict[str, Any]) -> dict[str, Any]:
 
 async def handle_delete_skill(arguments: dict[str, Any]) -> dict[str, Any]:
     """Delete a saved skill."""
-    from agent_skills.simple import SimpleSkillsManager
+    from agent_skills import SkillsManager
     
     name = arguments["name"]
 
     config = _config or CodeModeConfig()
-    manager = SimpleSkillsManager(config.skills_path)
+    manager = SkillsManager(config.skills_path)
     
-    success = manager.delete_skill(name)
+    skill = manager.get(name)
+    success = manager.delete(skill.skill_id) if skill and skill.skill_id else False
     
     return {
         "success": success,

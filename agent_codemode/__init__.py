@@ -49,10 +49,6 @@ from agent_skills import (
     SkillDirectory,
     SkillFile,
     SkillsManager,
-    SimpleSkill,
-    SimpleSkillsManager,
-    SimpleSkillManager,  # Alias for backward compatibility
-    SkillManager,  # Alias for backward compatibility
     setup_skills_directory,
     wait_for,
     retry,
@@ -75,10 +71,6 @@ __all__ = [
     # Skills (from agent_skills)
     "Skill",
     "SkillsManager",
-    "SimpleSkill",
-    "SimpleSkillsManager",
-    "SimpleSkillManager",  # Alias for backward compatibility
-    "SkillManager",  # Alias for backward compatibility
     "SkillDirectory",
     "SkillFile",
     "setup_skills_directory",
