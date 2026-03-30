@@ -104,15 +104,37 @@ if PYDANTIC_AI_AVAILABLE:
         allow_direct_tool_calls: bool | None = None
         allow_discovery_tools: bool = True
         tool_reranker: Callable[[list, str, Optional[str]], Awaitable[list]] | None = None
+        # Optional callback invoked when execution state toggles.
+        # Used by agent-runtimes to push websocket status updates without polling.
+        status_change_callback: Callable[[bool], Awaitable[None]] | None = None
         _id: str | None = None
         
         # Internal state
         _executor: CodeModeExecutor | None = field(default=None, repr=False)
         _initialized: bool = field(default=False, repr=False)
         _codemode_call_count: int = field(default=0, repr=False)
+        _runtime_is_executing: bool = field(default=False, repr=False)
         _post_init_callbacks: list[Callable[["CodemodeToolset"], None]] = field(
             default_factory=list, repr=False,
         )
+
+        @property
+        def runtime_is_executing(self) -> bool:
+            """Execution state tracked by toolset lifecycle hooks."""
+            return self._runtime_is_executing
+
+        async def _set_runtime_executing(self, value: bool) -> None:
+            if self._runtime_is_executing == value:
+                return
+            self._runtime_is_executing = value
+            if self.status_change_callback is not None:
+                try:
+                    await self.status_change_callback(value)
+                except Exception as exc:
+                    logger.debug(
+                        "Codemode status_change_callback failed: %s",
+                        exc,
+                    )
         
         def __post_init__(self):
             if self.registry is None:
@@ -470,6 +492,7 @@ if PYDANTIC_AI_AVAILABLE:
                 return {"success": False, "error": "Executor not initialized"}
             
             try:
+                await self._set_runtime_executing(True)
                 start_time = time.monotonic()
                 # Log full code for debugging (truncate only for single-line display)
                 code_lines = (code or "").strip().split('\n')
@@ -537,6 +560,8 @@ if PYDANTIC_AI_AVAILABLE:
                     "execution_time": 0,
                     "error": str(e),
                 }
+            finally:
+                await self._set_runtime_executing(False)
         
         async def _call_tool(
             self,
