@@ -372,7 +372,7 @@ For Pydantic AI agents, use the `AgentSkillsToolset`:
 ```python
 from pydantic_ai import Agent
 from agent_skills import AgentSkillsToolset, SandboxExecutor
-from code_sandboxes import LocalEvalSandbox
+from code_sandboxes.eval_sandbox import LocalEvalSandbox
 
 # Create toolset with sandbox execution
 sandbox = LocalEvalSandbox()

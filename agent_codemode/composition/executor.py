@@ -133,7 +133,7 @@ class CodeModeExecutor:
         self._skills_metadata = metadata
 
     def _is_local_eval_sandbox(self) -> bool:
-        """Check if the sandbox is a local-eval type (has in-memory namespaces).
+        """Check if the sandbox is a eval type (has in-memory namespaces).
         
         This checks the actual sandbox instance, not the config, to handle
         cases where an external sandbox is passed that differs from config.
@@ -202,7 +202,7 @@ class CodeModeExecutor:
             # Use /tmp so 'from generated.mcp...' works (files are at /tmp/generated/)
             sandbox_generated_path = "/tmp"
         else:
-            # For local-eval, use the parent directory so 'from generated.mcp...' works
+            # For eval, use the parent directory so 'from generated.mcp...' works
             # The generated_path might be './generated', we need its parent on sys.path
             sandbox_generated_path = str(generated_path.parent)
 
@@ -705,7 +705,7 @@ print(f"Generated tool bindings for {{len(__tools_data__)}} tools in {{__generat
         skill scripts **directly** in the Jupyter kernel, reading the script
         files from the shared ``skills_path`` on disk.  This avoids the
         HTTP proxy round-trip (call_tool → MCP proxy → agent-runtimes →
-        local-eval fallback) which caused blocking and deadlocks.
+        eval fallback) which caused blocking and deadlocks.
 
         The skills_path is the same between the agent-runtimes process and
         the Jupyter runtime (shared filesystem or mount).
@@ -717,7 +717,7 @@ print(f"Generated tool bindings for {{len(__tools_data__)}} tools in {{__generat
         if self._sandbox is None or not self._skills_metadata:
             return
 
-        # Skip for local-eval sandboxes (they use the on-disk generated files)
+        # Skip for eval sandboxes (they use the on-disk generated files)
         if self._is_local_eval_sandbox():
             return
 
@@ -1032,7 +1032,7 @@ print("Mode: direct execution (no MCP proxy)")
             
             # Get the generated path for sys.path setup
             # For remote sandboxes, use /tmp so 'from generated.mcp...' works (files at /tmp/generated/)
-            # For local-eval, use parent of generated_path so 'from generated.mcp...' works
+            # For eval, use parent of generated_path so 'from generated.mcp...' works
             # Use actual sandbox type detection, not config
             is_local_eval = self._is_local_eval_sandbox()
             if not is_local_eval:
@@ -1086,7 +1086,7 @@ except Exception:
 '''
             # Branch based on actual sandbox type (already computed above)
             if is_local_eval:
-                # For local-eval, we can access _namespaces directly
+                # For eval, we can access _namespaces directly
                 return await self._execute_local_eval(code, setup_code, timeout)
             else:
                 # For Jupyter/remote sandboxes, use run_code()
@@ -1099,7 +1099,7 @@ except Exception:
         setup_code: str,
         timeout: Optional[float] = None,
     ) -> ExecutionResult:
-        """Execute code in local-eval sandbox with direct namespace access."""
+        """Execute code in eval sandbox with direct namespace access."""
         import sys
         import io
         import time

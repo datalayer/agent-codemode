@@ -30,7 +30,7 @@ async def main():
     # Create executor
     config = CodeModeConfig(
         workspace_path=Path(__file__).parent / "examples" / "agent",
-        sandbox_variant="local-eval"
+        sandbox_variant="eval"
     )
     executor = CodeModeExecutor(registry=registry, config=config)
     await executor.setup()

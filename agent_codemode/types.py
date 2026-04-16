@@ -223,7 +223,7 @@ class CodeModeConfig(BaseModel):
     workspace_path: str = "./workspace"
     skills_path: str = "./skills"
     generated_path: str = "./generated"
-    sandbox_variant: str = "local-eval"
+    sandbox_variant: str = "eval"
     sandbox_image: str | None = None
     allow_direct_tool_calls: bool = False
     max_tool_calls: int | None = None

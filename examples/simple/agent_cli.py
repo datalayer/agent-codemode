@@ -33,7 +33,7 @@ except ImportError:
 
 try:
     from agent_skills import AgentSkillsToolset, SandboxExecutor
-    from code_sandboxes import LocalEvalSandbox
+    from code_sandboxes.eval_sandbox import LocalEvalSandbox
     HAS_AGENT_SKILLS = True
 except ImportError:
     HAS_AGENT_SKILLS = False

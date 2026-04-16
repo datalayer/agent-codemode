@@ -63,7 +63,7 @@ Same task, same MCP server — Code Mode uses significantly fewer tokens by comp
 |--------|-------------|
 | `allow_direct_tool_calls` | When `False` (default), `call_tool` is hidden; all execution flows through `execute_code` |
 | `max_tool_calls` | Safety cap limiting tool invocations per `execute_code` run |
-| `sandbox_variant` | Sandbox type for code execution (default: `"local-eval"`) |
+| `sandbox_variant` | Sandbox type for code execution (default: `"eval"`) |
 | `workspace_path` | Working directory for sandbox execution |
 | `generated_path` | Path where tool bindings are generated |
 | `skills_path` | Path for saved skills |
