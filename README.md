@@ -461,6 +461,29 @@ When running in a sandbox, state can persist between `execute_code` calls within
 - [Advanced Tool Use](https://www.anthropic.com/engineering/advanced-tool-use) - Anthropic
 - [Programmatic MCP Prototype](https://github.com/domdomegg/programmatic-mcp-prototype)
 
+## CI Workflows
+
+This repository uses a reusable GitHub Actions workflow at `.github/workflows/reusable-python.yml`.
+
+The following workflows call it:
+
+- `.github/workflows/build.yml`
+- `.github/workflows/py-tests.yml`
+- `.github/workflows/py-code-style.yml`
+- `.github/workflows/py-typing.yml`
+
+Reusable workflow inputs:
+
+- `python-version`: Python version to run.
+- `install-system-deps`: Install Linux dependencies and unlock keyring.
+- `install-extras`: Extras from `pyproject.toml` (for example `test,typing`).
+- `extra-packages`: Additional packages installed with `uv pip install`.
+- `run-tests`: Enable test execution.
+- `test-command`: Command used for tests.
+- `run-mypy`: Enable mypy.
+- `mypy-target`: Package or module passed to mypy.
+- `run-pre-commit`: Enable pre-commit checks.
+
 ## License
 
 BSD 3-Clause License

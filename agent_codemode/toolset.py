@@ -100,7 +100,7 @@ if PYDANTIC_AI_AVAILABLE:
         
         registry: ToolRegistry | None = None
         config: CodeModeConfig = field(default_factory=CodeModeConfig)
-        sandbox: Any | None = None  # Optional pre-configured sandbox (e.g., LocalEvalSandbox)
+        sandbox: Any | None = None  # Optional pre-configured sandbox (e.g., EvalSandbox)
         allow_direct_tool_calls: bool | None = None
         allow_discovery_tools: bool = True
         tool_reranker: Callable[[list, str, Optional[str]], Awaitable[list]] | None = None
