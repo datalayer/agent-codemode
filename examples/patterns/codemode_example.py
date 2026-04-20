@@ -86,7 +86,7 @@ async def example_code_execution():
     
     # Configure the executor
     config = CodeModeConfig(
-        sandbox_variant="local-eval",  # For development
+        sandbox_variant="eval",  # For development
         generated_path="./generated",
         skills_path="./skills",
     )

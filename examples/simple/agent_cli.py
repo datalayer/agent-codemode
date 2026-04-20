@@ -33,7 +33,7 @@ except ImportError:
 
 try:
     from agent_skills import AgentSkillsToolset, SandboxExecutor
-    from code_sandboxes import LocalEvalSandbox
+    from code_sandboxes.eval_sandbox import EvalSandbox
     HAS_AGENT_SKILLS = True
 except ImportError:
     HAS_AGENT_SKILLS = False
@@ -348,8 +348,8 @@ def create_agent(model: str, codemode: bool) -> tuple[Agent, object | None, obje
         shared_sandbox = None
         skills_toolset = None
         if HAS_AGENT_SKILLS:
-            shared_sandbox = LocalEvalSandbox()
-            logger.info("Created shared LocalEvalSandbox for codemode and skills toolsets")
+            shared_sandbox = EvalSandbox()
+            logger.info("Created shared EvalSandbox for codemode and skills toolsets")
 
         toolset = CodemodeToolset(
             registry=registry,

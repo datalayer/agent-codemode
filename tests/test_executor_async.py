@@ -7,7 +7,7 @@ from code_sandboxes import Sandbox
 
 async def main():
     # Create a sandbox
-    sandbox = Sandbox.create(variant="local-eval")
+    sandbox = Sandbox.create(variant="eval")
     sandbox.start()
     
     # Set up an executor mock

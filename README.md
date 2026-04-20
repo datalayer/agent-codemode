@@ -63,7 +63,7 @@ Same task, same MCP server — Code Mode uses significantly fewer tokens by comp
 |--------|-------------|
 | `allow_direct_tool_calls` | When `False` (default), `call_tool` is hidden; all execution flows through `execute_code` |
 | `max_tool_calls` | Safety cap limiting tool invocations per `execute_code` run |
-| `sandbox_variant` | Sandbox type for code execution (default: `"local-eval"`) |
+| `sandbox_variant` | Sandbox type for code execution (default: `"eval"`) |
 | `workspace_path` | Working directory for sandbox execution |
 | `generated_path` | Path where tool bindings are generated |
 | `skills_path` | Path for saved skills |
@@ -460,6 +460,29 @@ When running in a sandbox, state can persist between `execute_code` calls within
 - [Programmatic Tool Calling](https://platform.claude.com/docs/en/agents-and-tools/tool-use/programmatic-tool-calling) - Anthropic
 - [Advanced Tool Use](https://www.anthropic.com/engineering/advanced-tool-use) - Anthropic
 - [Programmatic MCP Prototype](https://github.com/domdomegg/programmatic-mcp-prototype)
+
+## CI Workflows
+
+This repository uses a reusable GitHub Actions workflow at `.github/workflows/reusable-python.yml`.
+
+The following workflows call it:
+
+- `.github/workflows/build.yml`
+- `.github/workflows/py-tests.yml`
+- `.github/workflows/py-code-style.yml`
+- `.github/workflows/py-typing.yml`
+
+Reusable workflow inputs:
+
+- `python-version`: Python version to run.
+- `install-system-deps`: Install Linux dependencies and unlock keyring.
+- `install-extras`: Extras from `pyproject.toml` (for example `test,typing`).
+- `extra-packages`: Additional packages installed with `uv pip install`.
+- `run-tests`: Enable test execution.
+- `test-command`: Command used for tests.
+- `run-mypy`: Enable mypy.
+- `mypy-target`: Package or module passed to mypy.
+- `run-pre-commit`: Enable pre-commit checks.
 
 ## License
 
