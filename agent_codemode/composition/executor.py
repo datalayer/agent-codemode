@@ -154,9 +154,11 @@ class CodeModeExecutor:
         import sys as _sys
         print(f"[EXECUTOR.setup] Starting setup, sandbox_variant={self.config.sandbox_variant}", file=_sys.stderr)
         
-        # Generate code bindings
-        tools_dict = {tool.name: tool for tool in self.registry.list_tools()}
-        self._codegen.generate_from_tools(tools_dict)
+        # Generate code bindings on the host filesystem. Skip when running in
+        # sandbox-only mode (no generated modules exposed).
+        if self.config.setup_generated_modules:
+            tools_dict = {tool.name: tool for tool in self.registry.list_tools()}
+            self._codegen.generate_from_tools(tools_dict)
 
         # Create sandbox if not provided
         if self._sandbox is None:
@@ -193,6 +195,49 @@ class CodeModeExecutor:
 
         generated_path = Path(self.config.generated_path).resolve()
         skills_path = Path(self.config.skills_path).resolve()
+
+        # Sandbox-only mode: no generated tool bindings are exposed. Actively
+        # purge any stale ``generated.*`` modules, strip ``/tmp`` from
+        # ``sys.path``, and install an import finder that blocks future
+        # ``import generated.*`` attempts. This is necessary because the
+        # jupyter kernel's implicit cwd (``/tmp``) may resolve to a
+        # ``/tmp/generated/`` directory materialized by a sibling codemode
+        # agent on the same host.
+        if not self.config.setup_generated_modules:
+            generated_parent = str(Path(self.config.generated_path).resolve().parent)
+            purge_code = f'''
+import sys
+_generated_parent = {generated_parent!r}
+
+# Drop any cached generated modules
+for _mod_name in list(sys.modules.keys()):
+    if _mod_name == "generated" or _mod_name.startswith("generated."):
+        del sys.modules[_mod_name]
+
+# Strip filesystem locations that could contain generated/
+_blocked_paths = {{"/tmp", "", _generated_parent}}
+sys.path[:] = [p for p in sys.path if p not in _blocked_paths]
+
+# Install a meta-path finder that refuses to resolve generated.*
+class _BlockGeneratedFinder:
+    def find_spec(self, name, path=None, target=None):
+        if name == "generated" or name.startswith("generated."):
+            raise ModuleNotFoundError(
+                f"No module named {{name!r}} "
+                f"(codemode is disabled for this agent)"
+            )
+        return None
+
+if not any(
+    type(f).__name__ == "_BlockGeneratedFinder" for f in sys.meta_path
+):
+    sys.meta_path.insert(0, _BlockGeneratedFinder())
+'''
+            self._sandbox.run_code(purge_code)
+            # Register the tool caller so ``call_tool`` still works inside
+            # ``execute_code`` if the agent invokes it directly (raw MCP).
+            self._sandbox.register_tool_caller(self.call_tool)
+            return
 
         # For Jupyter/remote sandboxes, generate tools directly in the sandbox
         # Use actual sandbox type detection, not config

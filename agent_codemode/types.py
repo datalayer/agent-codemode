@@ -229,6 +229,13 @@ class CodeModeConfig(BaseModel):
     max_tool_calls: int | None = None
     skills_directories: list[str] = Field(default_factory=list)
     mcp_proxy_url: str | None = None
+    setup_generated_modules: bool = True
+    """When False, the executor skips writing ``generated/`` tool bindings
+    into the sandbox and does NOT extend the sandbox ``sys.path`` to make
+    ``from generated.mcp.<server> import ...`` importable. This is the
+    correct mode for sandbox-only agents (codemode disabled) so that no
+    programmatic tool bindings are exposed even if a sibling codemode
+    agent has materialized them on a shared filesystem."""
 
 
 class SearchResult(BaseModel):
