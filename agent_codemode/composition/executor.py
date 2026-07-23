@@ -167,7 +167,7 @@ class CodeModeExecutor:
             env_vars = dict(os.environ)
 
             sandbox_config = SandboxConfig(
-                timeout=self.config.sandbox_variant == "datalayer-runtime" and 300 or 30,
+                timeout=300 if self.config.sandbox_variant == "datalayer" else 30,
                 working_dir=self.config.workspace_path,
                 env_vars=env_vars,
             )

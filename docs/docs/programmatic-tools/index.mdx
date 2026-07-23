@@ -243,7 +243,7 @@ This means you get the safety and isolation of MCP servers while writing natural
 from agent_codemode import CodeModeConfig, CodeModeExecutor
 
 config = CodeModeConfig(
-    sandbox_variant="local",           # "local" or "datalayer-runtime"
+    sandbox_variant="eval",            # eval | monty | docker | jupyter | colab | modal | datalayer
     workspace_path="/workspace",       # Working directory
     generated_path="/tmp/generated",   # Where to put generated bindings
     default_timeout=30.0,              # Default execution timeout
@@ -254,8 +254,13 @@ executor = CodeModeExecutor(registry, config=config)
 
 ### Sandbox Variants
 
-- **local**: Runs in a subprocess on the same machine
-- **datalayer-runtime**: Runs in a cloud-based Datalayer Runtime
+- **eval**: In-process Python execution on the same machine (default)
+- **monty**: Secure in-process interpreter (pydantic-monty)
+- **docker**: Docker container with an isolated kernel
+- **jupyter**: Jupyter Server with a persistent kernel
+- **colab**: Google Colab runtime
+- **modal**: Modal cloud containers (optional GPU)
+- **datalayer**: Cloud-based Datalayer Runtime
 
 ### Available in Sandbox
 

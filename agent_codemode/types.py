@@ -198,7 +198,10 @@ class CodeModeConfig(BaseModel):
         workspace_path: Path for workspace files.
         skills_path: Path for saved skills.
         generated_path: Path for generated code bindings.
-        sandbox_variant: Which sandbox to use for execution.
+        sandbox_variant: Which sandbox to use for execution. One of the
+            code-sandboxes variants: ``eval`` (in-process, default),
+            ``monty`` (secure in-process interpreter), ``docker``,
+            ``jupyter``, ``colab``, ``modal``, or ``datalayer``.
         sandbox_image: Optional sandbox image (for Docker-based sandboxes).
         allow_direct_tool_calls: Whether to expose call_tool in the toolset.
         max_tool_calls: Optional safety cap for tool calls per execute() run.

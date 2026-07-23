@@ -48,7 +48,7 @@ from agent_codemode import CodemodeToolset, CodeModeConfig
 config = CodeModeConfig(
     workspace_path="/workspace",
     generated_path="/tmp/generated",
-    sandbox_variant="local",
+    sandbox_variant="eval",
     default_timeout=60.0,
 )
 
@@ -310,7 +310,7 @@ Configure sandbox security:
 from agent_codemode import CodeModeConfig
 
 config = CodeModeConfig(
-    sandbox_variant="datalayer-runtime",  # Isolated cloud sandbox
+    sandbox_variant="datalayer",  # Isolated cloud sandbox
     default_timeout=30.0,                  # Limit execution time
     workspace_path="/safe/workspace",      # Restricted workspace
 )
