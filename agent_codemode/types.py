@@ -201,8 +201,11 @@ class CodeModeConfig(BaseModel):
         sandbox_variant: Which sandbox to use for execution. One of the
             code-sandboxes variants: ``eval`` (in-process, default),
             ``monty`` (secure in-process interpreter), ``docker``,
-            ``jupyter``, ``colab``, ``modal``, or ``datalayer``.
+            ``jupyter``, ``colab``, ``kaggle``, ``modal``, or ``datalayer``.
         sandbox_image: Optional sandbox image (for Docker-based sandboxes).
+        sandbox_gpu: Optional GPU flavor / accelerator for supported sandboxes
+            (for example Modal/Datalayer: ``T4``, ``A100``; Kaggle batch:
+            ``NvidiaTeslaT4`` or alias ``T4``).
         allow_direct_tool_calls: Whether to expose call_tool in the toolset.
         max_tool_calls: Optional safety cap for tool calls per execute() run.
         skills_directories: Directories to scan for skill definitions.
@@ -228,6 +231,7 @@ class CodeModeConfig(BaseModel):
     generated_path: str = "./generated"
     sandbox_variant: str = "eval"
     sandbox_image: str | None = None
+    sandbox_gpu: str | None = None
     allow_direct_tool_calls: bool = False
     max_tool_calls: int | None = None
     skills_directories: list[str] = Field(default_factory=list)

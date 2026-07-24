@@ -49,7 +49,7 @@ def _get_identity_env() -> dict[str, str]:
     try:
         from agent_runtimes.context.identities import get_identity_env
         return get_identity_env()
-    except ImportError:
+    except Exception:
         return {}
 
 
@@ -170,6 +170,7 @@ class CodeModeExecutor:
                 timeout=300 if self.config.sandbox_variant == "datalayer" else 30,
                 working_dir=self.config.workspace_path,
                 env_vars=env_vars,
+                gpu=self.config.sandbox_gpu,
             )
             sandbox_kwargs: dict[str, Any] = {}
             if self.config.sandbox_image:
@@ -1276,7 +1277,57 @@ except (ImportError, NameError) as e:
     print(f"[EXECUTE] Failed to rewire tool caller: {type(e).__name__}: {e}", file=sys.stderr)
 '''
         await asyncio.to_thread(self._sandbox.run_code, tool_caller_rewire, timeout=timeout)
-        
+
+        if hasattr(self._sandbox, "run_code_streaming"):
+            from code_sandboxes.models import CodeError, Logs, OutputMessage, Result
+
+            def _collect_streaming_result() -> ExecutionResult:
+                stdout: list[OutputMessage] = []
+                stderr: list[OutputMessage] = []
+                results: list[Result] = []
+                code_error: CodeError | None = None
+
+                try:
+                    for event in self._sandbox.run_code_streaming(code, timeout=timeout):
+                        if hasattr(event, "line"):
+                            message = OutputMessage(
+                                line=str(getattr(event, "line", "") or ""),
+                                timestamp=float(getattr(event, "timestamp", 0.0) or 0.0),
+                                error=bool(getattr(event, "error", False)),
+                            )
+                            if message.error:
+                                stderr.append(message)
+                            else:
+                                stdout.append(message)
+                        elif hasattr(event, "data"):
+                            results.append(
+                                Result(
+                                    data=getattr(event, "data", {}) or {},
+                                    is_main_result=bool(getattr(event, "is_main_result", False)),
+                                    extra=getattr(event, "extra", {}) or {},
+                                )
+                            )
+                        elif hasattr(event, "name") and hasattr(event, "value"):
+                            code_error = CodeError(
+                                name=str(getattr(event, "name", "Error") or "Error"),
+                                value=str(getattr(event, "value", "") or ""),
+                                traceback=str(getattr(event, "traceback", "") or ""),
+                            )
+
+                    return ExecutionResult(
+                        logs=Logs(stdout=stdout, stderr=stderr),
+                        results=results,
+                        code_error=code_error,
+                        execution_ok=True,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    return ExecutionResult(
+                        execution_ok=False,
+                        execution_error=str(exc),
+                    )
+
+            return await asyncio.to_thread(_collect_streaming_result)
+
         # Run user code in thread pool - this is where tool calls happen
         # and the kernel may call back to the MCP proxy
         return await asyncio.to_thread(self._sandbox.run_code, code, timeout=timeout)

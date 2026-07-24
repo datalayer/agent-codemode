@@ -63,10 +63,17 @@ Same task, same MCP server — Code Mode uses significantly fewer tokens by comp
 |--------|-------------|
 | `allow_direct_tool_calls` | When `False` (default), `call_tool` is hidden; all execution flows through `execute_code` |
 | `max_tool_calls` | Safety cap limiting tool invocations per `execute_code` run |
-| `sandbox_variant` | Sandbox type for code execution (default: `"eval"`). One of `eval`, `monty`, `docker`, `jupyter`, `colab`, `modal`, `datalayer` |
+| `sandbox_variant` | Sandbox type for code execution (default: `"eval"`). One of `eval`, `monty`, `docker`, `jupyter`, `colab`, `kaggle`, `modal`, `datalayer` |
+| `sandbox_gpu` | Optional GPU flavor / accelerator for supported variants (Modal/Datalayer examples: `T4`, `A10G`, `A100`, `H100`; Kaggle batch examples: `NvidiaTeslaT4`, `NvidiaTeslaP100`, `T4`, `P100`) |
 | `workspace_path` | Working directory for sandbox execution |
 | `generated_path` | Path where tool bindings are generated |
 | `skills_path` | Path for saved skills |
+
+When using cloud notebook variants via code-sandboxes:
+
+- `colab` reuses an already-running Colab kernel (from explicit runtime values or a channels URL).
+- `kaggle` defaults to batch execution via Kaggle's API when no runtime URL/channels are provided; it can also create/attach interactive kernels when runtime values are provided.
+- `kaggle` accelerator selection is available in batch mode via `gpu` / `accelerator` (for example `T4`, `P100`, `NvidiaTeslaT4`).
 
 ### Tool Discovery Options
 
