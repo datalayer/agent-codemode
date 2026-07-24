@@ -41,6 +41,7 @@ print(text)
 ### httpx - HTTP Client
 
 #### Basic GET Request
+
 ```python
 import httpx
 
@@ -51,6 +52,7 @@ print(response.text)
 ```
 
 #### GET with Headers and Parameters
+
 ```python
 headers = {
     "User-Agent": "Mozilla/5.0 (compatible; DataBot/1.0)",
@@ -67,6 +69,7 @@ response = httpx.get(
 ```
 
 #### Handle Redirects and Errors
+
 ```python
 import httpx
 
@@ -85,6 +88,7 @@ except httpx.RequestError as e:
 ```
 
 #### Async Requests
+
 ```python
 import httpx
 import asyncio
@@ -103,6 +107,7 @@ results = asyncio.run(fetch_pages(urls))
 ### BeautifulSoup - HTML Parsing
 
 #### Parse HTML and Extract Elements
+
 ```python
 from bs4 import BeautifulSoup
 
@@ -130,6 +135,7 @@ links = [(a.text, a.get("href")) for a in soup.find_all("a")]
 ```
 
 #### Extract Text Content
+
 ```python
 from bs4 import BeautifulSoup
 
@@ -145,6 +151,7 @@ if main_content:
 ```
 
 #### Extract Links with Absolute URLs
+
 ```python
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
@@ -163,6 +170,7 @@ for a in soup.find_all("a", href=True):
 ```
 
 #### Extract Tables
+
 ```python
 from bs4 import BeautifulSoup
 
@@ -178,6 +186,7 @@ for table in soup.find_all("table"):
 ```
 
 #### CSS Selectors
+
 ```python
 from bs4 import BeautifulSoup
 
@@ -193,6 +202,7 @@ first_para = soup.select_one("p")
 ## Complete Crawling Example
 
 ### Single Page Crawler
+
 ```python
 import httpx
 from bs4 import BeautifulSoup
@@ -246,6 +256,7 @@ print(f"Links found: {len(page.links)}")
 ```
 
 ### Multi-Page Crawler with Depth Control
+
 ```python
 import httpx
 from bs4 import BeautifulSoup
@@ -320,6 +331,7 @@ for url, data in pages.items():
 ## Handling Special Cases
 
 ### JavaScript-Rendered Pages
+
 For pages that require JavaScript execution, use Playwright:
 
 ```python
@@ -337,6 +349,7 @@ def crawl_js_page(url: str) -> str:
 ```
 
 ### Respecting robots.txt
+
 ```python
 from urllib.robotparser import RobotFileParser
 from urllib.parse import urljoin
@@ -357,6 +370,7 @@ def can_crawl(url: str, user_agent: str = "*") -> bool:
 ```
 
 ### Rate Limiting
+
 ```python
 import time
 import httpx
@@ -385,14 +399,14 @@ class RateLimitedClient:
 
 This skill includes ready-to-use scripts in the `scripts/` folder:
 
-| Script | Description |
-|--------|-------------|
-| `fetch_page.py` | Fetch a single webpage and extract text content |
-| `extract_links.py` | Extract all links from a webpage with filtering |
-| `extract_tables.py` | Extract HTML tables as JSON or CSV |
-| `crawl_site.py` | Multi-page crawler with depth control |
-| `check_robots.py` | Check if URL is allowed by robots.txt |
-| `fetch_js_page.py` | Fetch JavaScript-rendered pages using Playwright |
+| Script              | Description                                      |
+| ------------------- | ------------------------------------------------ |
+| `fetch_page.py`     | Fetch a single webpage and extract text content  |
+| `extract_links.py`  | Extract all links from a webpage with filtering  |
+| `extract_tables.py` | Extract HTML tables as JSON or CSV               |
+| `crawl_site.py`     | Multi-page crawler with depth control            |
+| `check_robots.py`   | Check if URL is allowed by robots.txt            |
+| `fetch_js_page.py`  | Fetch JavaScript-rendered pages using Playwright |
 
 ### Usage Examples
 

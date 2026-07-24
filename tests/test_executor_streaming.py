@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import pytest
-
 from code_sandboxes import ExecutionResult, Logs, OutputMessage
 from code_sandboxes.models import Result
 

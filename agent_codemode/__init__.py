@@ -28,9 +28,28 @@ Example:
         ''')
 """
 
+# Import skills functionality from agent_skills
+from agent_skills import (
+    RateLimiter,
+    Skill,
+    SkillDirectory,
+    SkillFile,
+    SkillsManager,
+    parallel,
+    retry,
+    run_with_timeout,
+    setup_skills_directory,
+    wait_for,
+)
+
 from .composition.executor import CodeModeExecutor
 from .discovery.codegen import PythonCodeGenerator
 from .discovery.registry import ToolRegistry
+from .proxy.mcp_client import MCPClient
+from .proxy.meta_tools import MetaToolProvider
+from .server import configure as configure_server
+from .server import mcp as codemode_server
+from .toolset import PYDANTIC_AI_AVAILABLE, CodemodeToolset
 from .types import (
     CodeModeConfig,
     MCPServerConfig,
@@ -40,58 +59,39 @@ from .types import (
     ToolDefinition,
     ToolParameter,
 )
-from .proxy.mcp_client import MCPClient
-from .proxy.meta_tools import MetaToolProvider
-
-# Import skills functionality from agent_skills
-from agent_skills import (
-    Skill,
-    SkillDirectory,
-    SkillFile,
-    SkillsManager,
-    setup_skills_directory,
-    wait_for,
-    retry,
-    run_with_timeout,
-    parallel,
-    RateLimiter,
-)
-
-from .server import mcp as codemode_server, configure as configure_server
-from .toolset import CodemodeToolset, PYDANTIC_AI_AVAILABLE
 
 __all__ = [
-    # Core components
-    "ToolRegistry",
+    "PYDANTIC_AI_AVAILABLE",
+    "CodeModeConfig",
     "CodeModeExecutor",
-    "PythonCodeGenerator",
-    # Proxy
-    "MCPClient",
-    "MetaToolProvider",
-    # Skills (from agent_skills)
-    "Skill",
-    "SkillsManager",
-    "SkillDirectory",
-    "SkillFile",
-    "setup_skills_directory",
-    # Helpers (from agent_skills)
-    "wait_for",
-    "retry",
-    "run_with_timeout",
-    "parallel",
-    "RateLimiter",
-    # MCP Server
-    "codemode_server",
-    "configure_server",
     # Pydantic AI Toolset
     "CodemodeToolset",
-    "PYDANTIC_AI_AVAILABLE",
+    # Proxy
+    "MCPClient",
+    "MCPServerConfig",
+    "MetaToolProvider",
+    "PythonCodeGenerator",
+    "RateLimiter",
+    "SearchResult",
+    "ServerInfo",
+    # Skills (from agent_skills)
+    "Skill",
+    "SkillDirectory",
+    "SkillFile",
+    "SkillsManager",
+    "ToolCallResult",
     # Models
     "ToolDefinition",
     "ToolParameter",
-    "ToolCallResult",
-    "MCPServerConfig",
-    "CodeModeConfig",
-    "SearchResult",
-    "ServerInfo",
+    # Core components
+    "ToolRegistry",
+    # MCP Server
+    "codemode_server",
+    "configure_server",
+    "parallel",
+    "retry",
+    "run_with_timeout",
+    "setup_skills_directory",
+    # Helpers (from agent_skills)
+    "wait_for",
 ]

@@ -6,8 +6,8 @@
 
 import asyncio
 import json
-from typing import Any, Optional
 from contextlib import suppress
+from typing import Any, Optional
 
 import httpx
 
@@ -82,6 +82,7 @@ class MCPClient:
         """Start the stdio process."""
         if self._stdio_process is None or self._stdio_process.returncode is not None:
             import os
+
             env = {**os.environ, **self.env}
             self._stdio_process = await asyncio.create_subprocess_exec(
                 self.command,
@@ -99,6 +100,7 @@ class MCPClient:
             return self._stdio_session
 
         import os as _os
+
         from mcp.client.session import ClientSession
         from mcp.client.stdio import StdioServerParameters, stdio_client
 
@@ -196,7 +198,7 @@ class MCPClient:
 
             result = await self._send_jsonrpc("tools/list", {})
             return result.get("tools", [])
-        except Exception as e:
+        except Exception:
             # Fallback: try REST endpoint
             if self.is_http:
                 try:

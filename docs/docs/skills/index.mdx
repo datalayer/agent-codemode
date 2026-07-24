@@ -102,25 +102,25 @@ The primary pattern is organizing skills as Python files in a `skills/` director
 
 async def batch_process(input_dir: str, output_dir: str) -> dict:
     """Process all files in a directory.
-    
+
     Args:
         input_dir: Input directory path.
         output_dir: Output directory path.
-    
+
     Returns:
         Processing statistics.
     """
     from generated.mcp.filesystem import list_directory, read_file, write_file
-    
+
     entries = await list_directory({"path": input_dir})
     processed = 0
-    
+
     for entry in entries.get("entries", []):
         content = await read_file({"path": f"{input_dir}/{entry}"})
         # Process content...
         await write_file({"path": f"{output_dir}/{entry}", "content": content.upper()})
         processed += 1
-    
+
     return {"processed": processed}
 ```
 
@@ -142,12 +142,12 @@ import json
 async def analyze_file(file_path: str) -> dict:
     """Analyze a file and return statistics."""
     from generated.mcp.filesystem import read_file
-    
+
     content = await read_file({"path": file_path})
     lines = content.split('\n')
     word_count = len(content.split())
     char_count = len(content)
-    
+
     return {
         "lines": len(lines),
         "words": word_count,
@@ -160,7 +160,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python analyze_file.py <file-path>")
         sys.exit(1)
-    
+
     file_path = sys.argv[1]
     result = asyncio.run(analyze_file(file_path))
     print(json.dumps(result, indent=2))
@@ -197,22 +197,22 @@ async def wait_for(
     """Wait for an async condition to become true."""
     import time
     start_time = time.time()
-    
+
     while True:
         result = await condition()
         if result:
             return
-        
+
         if time.time() - start_time > timeout_seconds:
             raise TimeoutError(f"Timeout waiting for condition after {timeout_seconds}s")
-        
+
         await asyncio.sleep(interval_seconds)
 
 
 async def retry(fn, max_attempts: int = 3, delay_seconds: float = 1.0):
     """Retry a function until it succeeds or max attempts reached."""
     last_error = None
-    
+
     for attempt in range(1, max_attempts + 1):
         try:
             return await fn()
@@ -220,7 +220,7 @@ async def retry(fn, max_attempts: int = 3, delay_seconds: float = 1.0):
             last_error = e
             if attempt < max_attempts:
                 await asyncio.sleep(delay_seconds)
-    
+
     raise RuntimeError(f"Failed after {max_attempts} attempts: {last_error}")
 ```
 
@@ -335,13 +335,13 @@ Skills can import and use other skills to build higher-level operations:
 async def analyze_and_report(data_dir: str) -> dict:
     from skills.batch_process import batch_process
     from skills.generate_report import generate_report
-    
+
     # First process the files
     process_result = await batch_process(data_dir, f"{data_dir}/processed")
-    
+
     # Then generate a report
     report = await generate_report(f"{data_dir}/processed")
-    
+
     return {"processed": process_result["processed"], "report": report}
 ```
 

@@ -81,16 +81,16 @@ Now you can run code that composes MCP tools:
 ```python
 result = await executor.execute("""
     from generated.mcp.filesystem import read_file, write_file
-    
+
     # Read a file
     content = await read_file({"path": "/tmp/input.txt"})
-    
+
     # Process it
     processed = content.upper()
-    
+
     # Write the result
     await write_file({"path": "/tmp/output.txt", "content": processed})
-    
+
     print(f"Processed {len(content)} characters")
 """)
 
@@ -116,30 +116,30 @@ async def main():
         args=["-y", "@anthropic/mcp-server-filesystem", "/workspace"]
     ))
     await registry.discover_all()
-    
+
     # Set up executor
     executor = CodeModeExecutor(registry)
     await executor.setup()
-    
+
     # Execute code
     result = await executor.execute("""
         from generated.mcp.filesystem import list_directory, read_file
         import asyncio
-        
+
         # List files
         entries = await list_directory({"path": "/"})
         print(f"Found {len(entries['entries'])} files")
-        
+
         # Read all text files in parallel
         txt_files = [e for e in entries['entries'] if e.endswith('.txt')]
         contents = await asyncio.gather(*[
             read_file({"path": f"/{f}"}) for f in txt_files
         ])
-        
+
         total_chars = sum(len(c) for c in contents)
         print(f"Total characters: {total_chars}")
     """)
-    
+
     if result.success:
         print("Execution successful!")
         print(result.output)

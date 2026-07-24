@@ -4,9 +4,9 @@
 
 """Pytest configuration and fixtures for agent-codemode tests."""
 
-import pytest
-import tempfile
 from pathlib import Path
+
+import pytest
 
 
 @pytest.fixture

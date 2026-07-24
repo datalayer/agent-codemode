@@ -106,10 +106,10 @@ Agent Codemode generates Python bindings in the `generated/mcp/` directory:
 # Generated: generated/mcp/filesystem.py
 async def read_file(arguments: dict) -> str:
     """Read the complete contents of a file.
-    
+
     Args:
         path: Path to the file to read
-    
+
     Returns:
         File contents as string
     """
@@ -117,11 +117,11 @@ async def read_file(arguments: dict) -> str:
 
 async def write_file(arguments: dict) -> dict:
     """Write content to a file.
-    
+
     Args:
         path: Path to the file to write
         content: Content to write
-    
+
     Returns:
         Success status
     """
@@ -282,17 +282,17 @@ async with CodeModeExecutor(registry) as executor:
     result = await executor.execute("""
         from generated.mcp.filesystem import read_file, write_file
         from generated.mcp.github import create_issue
-        
+
         # Read local file
         content = await read_file({"path": "/workspace/bug-report.txt"})
-        
+
         # Create GitHub issue with the content
         issue = await create_issue({
             "repo": "myorg/myrepo",
             "title": "Bug Report",
             "body": content
         })
-        
+
         print(f"Created issue: {issue['url']}")
     """)
 ```

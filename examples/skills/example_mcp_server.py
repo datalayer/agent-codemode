@@ -13,14 +13,14 @@ import random
 from pathlib import Path
 from typing import Optional
 
-from typing_extensions import TypedDict
-
 from mcp.server.fastmcp import FastMCP
+from typing_extensions import TypedDict
 
 mcp = FastMCP("example-mcp-server")
 
 # Base directory for file operations - defaults to /tmp if CWD is not writable
 _BASE_DIR: Path | None = None
+
 
 def _get_base_dir() -> Path:
     """Get the base directory for file operations."""
@@ -35,28 +35,94 @@ def _get_base_dir() -> Path:
         _BASE_DIR.mkdir(parents=True, exist_ok=True)
     return _BASE_DIR
 
+
 _WORDS = [
-    "alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel",
-    "india", "juliet", "kilo", "lima", "mike", "november", "oscar", "papa",
-    "quebec", "romeo", "sierra", "tango", "uniform", "victor", "whiskey",
-    "xray", "yankee", "zulu", "apricot", "banana", "cherry", "date", "elderberry",
-    "fig", "grape", "honeydew", "kiwi", "lemon", "mango", "nectarine", "orange",
-    "papaya", "quince", "raspberry", "strawberry", "tangerine", "ugli", "vanilla",
-    "watermelon", "xigua", "yam", "zucchini", "azure", "binary", "cache",
-    "docker", "elastic", "feature", "gateway", "hash", "index", "json", "kafka",
-    "lambda", "micro", "node", "object", "python", "query", "router", "schema",
-    "token", "vector", "worker", "yaml",
+    "alpha",
+    "bravo",
+    "charlie",
+    "delta",
+    "echo",
+    "foxtrot",
+    "golf",
+    "hotel",
+    "india",
+    "juliet",
+    "kilo",
+    "lima",
+    "mike",
+    "november",
+    "oscar",
+    "papa",
+    "quebec",
+    "romeo",
+    "sierra",
+    "tango",
+    "uniform",
+    "victor",
+    "whiskey",
+    "xray",
+    "yankee",
+    "zulu",
+    "apricot",
+    "banana",
+    "cherry",
+    "date",
+    "elderberry",
+    "fig",
+    "grape",
+    "honeydew",
+    "kiwi",
+    "lemon",
+    "mango",
+    "nectarine",
+    "orange",
+    "papaya",
+    "quince",
+    "raspberry",
+    "strawberry",
+    "tangerine",
+    "ugli",
+    "vanilla",
+    "watermelon",
+    "xigua",
+    "yam",
+    "zucchini",
+    "azure",
+    "binary",
+    "cache",
+    "docker",
+    "elastic",
+    "feature",
+    "gateway",
+    "hash",
+    "index",
+    "json",
+    "kafka",
+    "lambda",
+    "micro",
+    "node",
+    "object",
+    "python",
+    "query",
+    "router",
+    "schema",
+    "token",
+    "vector",
+    "worker",
+    "yaml",
 ]
 
 
 class GenerateRandomTextResult(TypedDict):
     """Result from generate_random_text."""
+
     text: str
     word_count: int
 
 
 class WriteTextFileResult(TypedDict):
     """Result from write_text_file."""
+
     path: str
     bytes: int
     words: int
@@ -64,6 +130,7 @@ class WriteTextFileResult(TypedDict):
 
 class ReadTextFileResult(TypedDict, total=False):
     """Result from read_text_file."""
+
     path: str
     bytes: int
     words: int
@@ -72,6 +139,7 @@ class ReadTextFileResult(TypedDict, total=False):
 
 class ReadTextFileManyResult(TypedDict):
     """Result from read_text_file_many."""
+
     path: str
     reads: int
     last: ReadTextFileResult
@@ -79,7 +147,7 @@ class ReadTextFileManyResult(TypedDict):
 
 def _normalize_path(path: str) -> Path:
     """Normalize a file path.
-    
+
     Absolute paths are used as-is. Relative paths are resolved
     relative to the base directory (CWD or /tmp/mcp_files if CWD is not writable).
     """
@@ -90,7 +158,9 @@ def _normalize_path(path: str) -> Path:
 
 
 @mcp.tool()
-def generate_random_text(word_count: int = 1000, seed: Optional[int] = None) -> GenerateRandomTextResult:
+def generate_random_text(
+    word_count: int = 1000, seed: Optional[int] = None
+) -> GenerateRandomTextResult:
     """Generate pseudo-random text.
 
     Args:
@@ -146,7 +216,7 @@ def read_text_file(
     target = _normalize_path(path)
     content = target.read_text(encoding="utf-8")
     if max_chars is not None:
-        content = content[: max_chars]
+        content = content[:max_chars]
     response = {
         "path": str(target),
         "bytes": len(content.encode("utf-8")),

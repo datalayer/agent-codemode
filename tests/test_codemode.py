@@ -5,33 +5,30 @@
 """Unit tests for agent-codemode package."""
 
 import asyncio
-import tempfile
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-
-from agent_codemode import CodemodeToolset, CodeModeConfig
-from agent_codemode.types import ToolDefinition, SearchResult
-
+from agent_skills.files import (
+    SkillDirectory,
+    SkillFile,
+)
 from agent_skills.helpers import (
-    wait_for,
+    RateLimiter,
+    parallel,
     retry,
     run_with_timeout,
-    parallel,
-    RateLimiter,
-)
-from agent_skills.files import (
-    SkillFile,
-    SkillDirectory,
-    setup_skills_directory,
+    wait_for,
 )
 
+from agent_codemode import CodeModeConfig, CodemodeToolset
+from agent_codemode.types import SearchResult, ToolDefinition
 
 # =============================================================================
 # wait_for Tests
 # =============================================================================
+
 
 class TestWaitFor:
     """Tests for wait_for helper."""
@@ -102,12 +99,14 @@ class TestWaitFor:
 # retry Tests
 # =============================================================================
 
+
 class TestRetry:
     """Tests for retry helper."""
 
     @pytest.mark.asyncio
     async def test_retry_success_first_try(self):
         """Test retry when function succeeds on first try."""
+
         async def succeed():
             return "success"
 
@@ -137,6 +136,7 @@ class TestRetry:
     @pytest.mark.asyncio
     async def test_retry_all_failures(self):
         """Test retry when function always fails."""
+
         async def always_fail():
             raise ValueError("Always fails")
 
@@ -221,12 +221,14 @@ class TestRetry:
 # run_with_timeout Tests
 # =============================================================================
 
+
 class TestRunWithTimeout:
     """Tests for run_with_timeout helper."""
 
     @pytest.mark.asyncio
     async def test_run_with_timeout_completes(self):
         """Test run_with_timeout when function completes in time."""
+
         async def fast_func():
             await asyncio.sleep(0.05)
             return "done"
@@ -237,6 +239,7 @@ class TestRunWithTimeout:
     @pytest.mark.asyncio
     async def test_run_with_timeout_exceeds(self):
         """Test run_with_timeout when function exceeds timeout."""
+
         async def slow_func():
             await asyncio.sleep(10.0)
             return "done"
@@ -249,12 +252,14 @@ class TestRunWithTimeout:
 # parallel Tests
 # =============================================================================
 
+
 class TestParallel:
     """Tests for parallel helper."""
 
     @pytest.mark.asyncio
     async def test_parallel_basic(self):
         """Test running coroutines in parallel."""
+
         async def task(n):
             await asyncio.sleep(0.01)
             return n * 2
@@ -276,6 +281,7 @@ class TestParallel:
     @pytest.mark.asyncio
     async def test_parallel_preserves_order(self):
         """Test that parallel preserves result order."""
+
         async def task(n, delay):
             await asyncio.sleep(delay)
             return n
@@ -293,6 +299,7 @@ class TestParallel:
 # =============================================================================
 # RateLimiter Tests
 # =============================================================================
+
 
 class TestRateLimiter:
     """Tests for RateLimiter class."""
@@ -331,6 +338,7 @@ class TestRateLimiter:
 # SkillFile Tests (agent_codemode version)
 # =============================================================================
 
+
 class TestMcpCodemodeSkillFile:
     """Tests for SkillFile in agent_codemode."""
 
@@ -354,6 +362,7 @@ async def process():
 # SkillDirectory Tests (agent_codemode version)
 # =============================================================================
 
+
 class TestMcpCodemodeSkillDirectory:
     """Tests for SkillDirectory in agent_codemode."""
 
@@ -375,8 +384,8 @@ class TestMcpCodemodeSkillDirectory:
         """Test searching skills."""
         skills = SkillDirectory(str(tmp_path))
 
-        skills.create(name="csv_reader", code='async def csv_reader(): pass')
-        skills.create(name="json_writer", code='async def json_writer(): pass')
+        skills.create(name="csv_reader", code="async def csv_reader(): pass")
+        skills.create(name="json_writer", code="async def json_writer(): pass")
 
         results = skills.search("csv")
         assert any(s.name == "csv_reader" for s in results)
@@ -385,6 +394,7 @@ class TestMcpCodemodeSkillDirectory:
 # =============================================================================
 # Integration Tests
 # =============================================================================
+
 
 class TestMcpCodemodeIntegration:
     """Integration tests for agent-codemode."""
@@ -397,21 +407,21 @@ class TestMcpCodemodeIntegration:
         # Create a skill that uses wait_for pattern internally
         skills.create(
             name="polling_skill",
-            code='''
+            code="""
 async def polling_skill():
     counter = [0]
-    
+
     def check():
         counter[0] += 1
         return counter[0] >= 3
-    
+
     # Simple polling without importing wait_for
     import asyncio
     while not check():
         await asyncio.sleep(0.01)
-    
+
     return {"checks": counter[0]}
-''',
+""",
         )
 
         skill = skills.get("polling_skill")
@@ -427,17 +437,17 @@ async def polling_skill():
 
         skills.create(
             name="retry_skill",
-            code='''
+            code="""
 async def retry_skill():
     attempts = 0
-    
+
     async def flaky_operation():
         nonlocal attempts
         attempts += 1
         if attempts < 3:
             raise ValueError("Temporary failure")
         return "success"
-    
+
     # Simple retry without importing retry helper
     for i in range(5):
         try:
@@ -446,9 +456,9 @@ async def retry_skill():
         except ValueError:
             import asyncio
             await asyncio.sleep(0.01)
-    
+
     raise RuntimeError("All retries failed")
-''',
+""",
         )
 
         skill = skills.get("retry_skill")
@@ -595,5 +605,8 @@ async def test_get_tool_details_includes_examples():
 
     result = await toolset._get_tool_details("a__one")
 
-    assert result["output_schema"] == {"type": "object", "properties": {"value": {"type": "string"}}}
+    assert result["output_schema"] == {
+        "type": "object",
+        "properties": {"value": {"type": "string"}},
+    }
     assert result["input_examples"] == [{"value": "example"}]

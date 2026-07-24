@@ -19,7 +19,7 @@
 Agent Codemode generates **programmatic tools** from two sources:
 
 1. **MCP Servers** - Connect to any MCP server and generate typed Python bindings for its tools
-2. **Skills** - Reusable code patterns that compose multiple tools into higher-level operations
+1. **Skills** - Reusable code patterns that compose multiple tools into higher-level operations
 
 These programmatic tools can be:
 
@@ -59,15 +59,15 @@ Same task, same MCP server — Code Mode uses significantly fewer tokens by comp
 
 ## Configuration Highlights
 
-| Option | Description |
-|--------|-------------|
-| `allow_direct_tool_calls` | When `False` (default), `call_tool` is hidden; all execution flows through `execute_code` |
-| `max_tool_calls` | Safety cap limiting tool invocations per `execute_code` run |
-| `sandbox_variant` | Sandbox type for code execution (default: `"eval"`). One of `eval`, `monty`, `docker`, `jupyter`, `colab`, `kaggle`, `modal`, `datalayer` |
-| `sandbox_gpu` | Optional GPU flavor / accelerator for supported variants (Modal/Datalayer examples: `T4`, `A10G`, `A100`, `H100`; Kaggle batch examples: `NvidiaTeslaT4`, `NvidiaTeslaP100`, `T4`, `P100`) |
-| `workspace_path` | Working directory for sandbox execution |
-| `generated_path` | Path where tool bindings are generated |
-| `skills_path` | Path for saved skills |
+| Option                    | Description                                                                                                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `allow_direct_tool_calls` | When `False` (default), `call_tool` is hidden; all execution flows through `execute_code`                                                                                                  |
+| `max_tool_calls`          | Safety cap limiting tool invocations per `execute_code` run                                                                                                                                |
+| `sandbox_variant`         | Sandbox type for code execution (default: `"eval"`). One of `eval`, `monty`, `docker`, `jupyter`, `colab`, `kaggle`, `modal`, `datalayer`                                                  |
+| `sandbox_gpu`             | Optional GPU flavor / accelerator for supported variants (Modal/Datalayer examples: `T4`, `A10G`, `A100`, `H100`; Kaggle batch examples: `NvidiaTeslaT4`, `NvidiaTeslaP100`, `T4`, `P100`) |
+| `workspace_path`          | Working directory for sandbox execution                                                                                                                                                    |
+| `generated_path`          | Path where tool bindings are generated                                                                                                                                                     |
+| `skills_path`             | Path for saved skills                                                                                                                                                                      |
 
 When using cloud notebook variants via code-sandboxes:
 
@@ -115,14 +115,14 @@ await registry.discover_all()
 async with CodeModeExecutor(registry) as executor:
     result = await executor.execute("""
         from generated.mcp.filesystem import read_file, write_file
-        
+
         # Read multiple files
         content1 = await read_file({"path": "/tmp/file1.txt"})
         content2 = await read_file({"path": "/tmp/file2.txt"})
-        
+
         # Process and combine
         combined = content1 + "\\n---\\n" + content2
-        
+
         # Write result
         await write_file({"path": "/tmp/combined.txt", "content": combined})
     """)
@@ -157,10 +157,10 @@ async with CodeModeExecutor(registry) as executor:
     execution = await executor.execute("""
         import asyncio
         from generated.mcp.filesystem import ls, read_file
-        
+
         # List all files
         files = await ls({"path": "/data"})
-        
+
         # Read all files in parallel
         contents = await asyncio.gather(*[
             read_file({"path": f}) for f in files
@@ -193,25 +193,25 @@ The primary pattern is skills as Python files in a `skills/` directory:
 
 async def batch_process(input_dir: str, output_dir: str) -> dict:
     """Process all files in a directory.
-    
+
     Args:
         input_dir: Input directory path.
         output_dir: Output directory path.
-    
+
     Returns:
         Processing statistics.
     """
     from generated.mcp.filesystem import list_directory, read_file, write_file
-    
+
     entries = await list_directory({"path": input_dir})
     processed = 0
-    
+
     for entry in entries.get("entries", []):
         content = await read_file({"path": f"{input_dir}/{entry}"})
         # Process content...
         await write_file({"path": f"{output_dir}/{entry}", "content": content.upper()})
         processed += 1
-    
+
     return {"processed": processed}
 ```
 
@@ -375,17 +375,17 @@ Then configure your MCP client to run the launcher script.
 
 **Tools exposed by the MCP server:**
 
-| Tool | Description |
-|------|-------------|
-| `search_tools` | Progressive tool discovery |
-| `list_servers` | List connected MCP servers |
-| `list_tool_names` | Fast listing of tool names |
-| `get_tool_details` | Get full tool schema |
-| `execute_code` | Run code that composes tools |
-| `call_tool` | Direct tool invocation |
-| `save_skill` / `run_skill` | Skill management |
-| `list_skills` / `delete_skill` | Skill management |
-| `add_mcp_server` | Dynamically add servers |
+| Tool                           | Description                  |
+| ------------------------------ | ---------------------------- |
+| `search_tools`                 | Progressive tool discovery   |
+| `list_servers`                 | List connected MCP servers   |
+| `list_tool_names`              | Fast listing of tool names   |
+| `get_tool_details`             | Get full tool schema         |
+| `execute_code`                 | Run code that composes tools |
+| `call_tool`                    | Direct tool invocation       |
+| `save_skill` / `run_skill`     | Skill management             |
+| `list_skills` / `delete_skill` | Skill management             |
+| `add_mcp_server`               | Dynamically add servers      |
 
 ## Recommended System Prompt
 
@@ -401,7 +401,7 @@ You are an AI assistant with access to MCP tools via Code Mode.
 - **execute_code** - Execute Python code in a sandboxed environment
 
 ## Execution Model
-ALL tool execution must go through execute_code. Write Python code that imports 
+ALL tool execution must go through execute_code. Write Python code that imports
 and uses the generated tool bindings:
 
 from generated.mcp.filesystem import read_file
@@ -412,9 +412,8 @@ print(content)
 ## Workflow
 
 1. Discover tools using search_tools or list_tool_names
-2. Write Python code that imports tools from generated.mcp.<name>
-3. Execute using execute_code
-
+1. Write Python code that imports tools from generated.mcp.<name>
+1. Execute using execute_code
 
 See the [Getting Started guide](https://agent-codemode.datalayer.tech/getting-started) for a complete system prompt example.
 

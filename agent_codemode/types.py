@@ -62,7 +62,7 @@ class ToolDefinition(BaseModel):
     server_url: str = ""
 
     @model_validator(mode="after")
-    def _unwrap_fastmcp_output_schema(self) -> "ToolDefinition":
+    def _unwrap_fastmcp_output_schema(self) -> ToolDefinition:
         """Unwrap FastMCP's artificial ``x-fastmcp-wrap-result`` wrapper.
 
         FastMCP wraps simple return types (e.g. ``str``) in an object schema
@@ -72,11 +72,7 @@ class ToolDefinition(BaseModel):
         inner type).  Unwrap it so every consumer sees the real schema.
         """
         schema = self.output_schema
-        if (
-            schema
-            and schema.get("x-fastmcp-wrap-result")
-            and schema.get("type") == "object"
-        ):
+        if schema and schema.get("x-fastmcp-wrap-result") and schema.get("type") == "object":
             props = schema.get("properties", {})
             if "result" in props:
                 # Replace with the inner type schema
@@ -217,9 +213,9 @@ class CodeModeConfig(BaseModel):
             HTTP to this URL instead of trying to use stdio. This enables
             the two-container architecture where MCP servers run in the
             agent-runtimes container and code executes in a Jupyter container.
-            
+
             Example: "http://agent-runtimes:8765/api/v1/mcp/proxy"
-            
+
             For local development with local Jupyter:
             "http://localhost:8765/api/v1/mcp/proxy"
     """

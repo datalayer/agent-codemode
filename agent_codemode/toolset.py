@@ -16,15 +16,15 @@ Key tools:
 Example:
     from pydantic_ai import Agent
     from agent_codemode import CodemodeToolset, ToolRegistry
-    
+
     # Set up registry
     registry = ToolRegistry()
     registry.add_server(MCPServerConfig(name="bash", url="..."))
     await registry.discover_all()
-    
+
     # Create toolset
     toolset = CodemodeToolset(registry=registry)
-    
+
     # Use with agent
     agent = Agent(
         model='openai:gpt-4o',
@@ -36,14 +36,15 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Awaitable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 # Lazy imports to avoid circular dependencies
 # ToolRegistry and CodeModeExecutor are imported at runtime in methods
 if TYPE_CHECKING:
-    from .discovery.registry import ToolRegistry
     from .composition.executor import CodeModeExecutor
+    from .discovery.registry import ToolRegistry
 
 from .types import CodeModeConfig
 
@@ -52,12 +53,12 @@ logger = logging.getLogger(__name__)
 
 # Check if pydantic-ai is available
 try:
+    from pydantic_ai._run_context import RunContext
+    from pydantic_ai.tools import ToolDefinition
     from pydantic_ai.toolsets import AbstractToolset
     from pydantic_ai.toolsets.abstract import ToolsetTool
-    from pydantic_ai.tools import ToolDefinition
-    from pydantic_ai._run_context import RunContext
     from pydantic_core import SchemaValidator, core_schema
-    
+
     PYDANTIC_AI_AVAILABLE = True
 except ImportError:
     PYDANTIC_AI_AVAILABLE = False
@@ -65,39 +66,38 @@ except ImportError:
 
 
 if PYDANTIC_AI_AVAILABLE:
-    
     # Schema validator for any args
     CODEMODE_ARGS_VALIDATOR = SchemaValidator(schema=core_schema.any_schema())
-    
+
     @dataclass
     class CodemodeToolset(AbstractToolset):
         """Codemode toolset for pydantic-ai with method-based tool execution.
-        
+
         This provides the same tools as the MCP server but via direct method
         calls, which is more efficient for in-process agent usage.
-        
+
         Provides:
         - search_tools: Find relevant tools by query
         - get_tool_details: Get full tool definition
         - list_servers: List connected MCP servers
         - execute_code: Run Python code that composes tools
         - call_tool: Call a single tool directly
-        
+
         Example:
             from agent_codemode import CodemodeToolset, ToolRegistry
             from pydantic_ai import Agent
-            
+
             registry = ToolRegistry()
             # ... configure registry ...
-            
+
             toolset = CodemodeToolset(registry=registry)
-            
+
             agent = Agent(
                 model='openai:gpt-4o',
                 toolsets=[toolset],
             )
         """
-        
+
         registry: ToolRegistry | None = None
         config: CodeModeConfig = field(default_factory=CodeModeConfig)
         sandbox: Any | None = None  # Optional pre-configured sandbox (e.g., EvalSandbox)
@@ -108,14 +108,15 @@ if PYDANTIC_AI_AVAILABLE:
         # Used by agent-runtimes to push websocket status updates without polling.
         status_change_callback: Callable[[bool], Awaitable[None]] | None = None
         _id: str | None = None
-        
+
         # Internal state
         _executor: CodeModeExecutor | None = field(default=None, repr=False)
         _initialized: bool = field(default=False, repr=False)
         _codemode_call_count: int = field(default=0, repr=False)
         _runtime_is_executing: bool = field(default=False, repr=False)
-        _post_init_callbacks: list[Callable[["CodemodeToolset"], None]] = field(
-            default_factory=list, repr=False,
+        _post_init_callbacks: list[Callable[[CodemodeToolset], None]] = field(
+            default_factory=list,
+            repr=False,
         )
 
         @property
@@ -135,19 +136,20 @@ if PYDANTIC_AI_AVAILABLE:
                         "Codemode status_change_callback failed: %s",
                         exc,
                     )
-        
+
         def __post_init__(self):
             if self.registry is None:
                 # Import at runtime to avoid circular dependency
                 from .discovery.registry import ToolRegistry
+
                 self.registry = ToolRegistry()
             # Default the direct-call policy from config if not provided
             if self.allow_direct_tool_calls is None:
                 self.allow_direct_tool_calls = self.config.allow_direct_tool_calls
-        
+
         def add_post_init_callback(
             self,
-            callback: Callable[["CodemodeToolset"], None],
+            callback: Callable[[CodemodeToolset], None],
         ) -> None:
             """Register a callback to run after executor initialisation.
 
@@ -156,23 +158,24 @@ if PYDANTIC_AI_AVAILABLE:
             wire skill bindings because the executor already exists.
             """
             self._post_init_callbacks.append(callback)
-        
+
         @property
         def id(self) -> str | None:
             return self._id
-        
+
         @property
         def label(self) -> str:
             return "Codemode Toolset"
-        
+
         async def _ensure_initialized(self) -> None:
             """Initialize the executor if not already done."""
             if self._initialized:
                 return
-            
+
             if self._executor is None:
                 # Import at runtime to avoid circular dependency
                 from .composition.executor import CodeModeExecutor
+
                 # Ensure tools are discovered before generating bindings
                 if self.registry is not None and not self.registry.list_tools():
                     logger.info("Codemode registry empty; discovering tools...")
@@ -189,7 +192,7 @@ if PYDANTIC_AI_AVAILABLE:
                     "Codemode executor setup complete (generated_path=%s)",
                     self.config.generated_path,
                 )
-            
+
             self._initialized = True
 
             # Run any registered post-init callbacks (e.g. skill wiring)
@@ -202,7 +205,7 @@ if PYDANTIC_AI_AVAILABLE:
         async def start(self) -> None:
             """Start the toolset and executor."""
             await self._ensure_initialized()
-        
+
         async def cleanup(self) -> None:
             """Clean up resources."""
             if self._executor:
@@ -213,12 +216,17 @@ if PYDANTIC_AI_AVAILABLE:
         async def get_tools(self, ctx: RunContext) -> dict[str, ToolsetTool]:
             """Get the tools provided by this toolset."""
             from .tool_definitions import get_tool_schema
-            
+
             tools = {}
-            
+
             if self.allow_discovery_tools:
                 # Discovery tools
-                for tool_name in ["list_tool_names", "search_tools", "get_tool_details", "list_servers"]:
+                for tool_name in [
+                    "list_tool_names",
+                    "search_tools",
+                    "get_tool_details",
+                    "list_servers",
+                ]:
                     schema = get_tool_schema(tool_name)
                     tools[tool_name] = ToolsetTool(
                         toolset=self,
@@ -230,7 +238,7 @@ if PYDANTIC_AI_AVAILABLE:
                         max_retries=0,
                         args_validator=CODEMODE_ARGS_VALIDATOR,
                     )
-            
+
             # execute_code - always available
             schema = get_tool_schema("execute_code")
             tools["execute_code"] = ToolsetTool(
@@ -243,7 +251,7 @@ if PYDANTIC_AI_AVAILABLE:
                 max_retries=0,
                 args_validator=CODEMODE_ARGS_VALIDATOR,
             )
-            
+
             # call_tool (optional)
             if self.allow_direct_tool_calls:
                 schema = get_tool_schema("call_tool")
@@ -257,9 +265,9 @@ if PYDANTIC_AI_AVAILABLE:
                     max_retries=1,
                     args_validator=CODEMODE_ARGS_VALIDATOR,
                 )
-            
+
             return tools
-        
+
         async def call_tool(
             self,
             name: str,
@@ -270,7 +278,7 @@ if PYDANTIC_AI_AVAILABLE:
             """Call a tool by name."""
             await self._ensure_initialized()
             self._codemode_call_count += 1
-            
+
             if name == "list_tool_names":
                 return await self._list_tool_names(
                     server=tool_args.get("server"),
@@ -303,7 +311,7 @@ if PYDANTIC_AI_AVAILABLE:
                 )
             else:
                 raise ValueError(f"Unknown tool: {name}")
-        
+
         async def _list_tool_names(
             self,
             server: Optional[str] = None,
@@ -325,7 +333,7 @@ if PYDANTIC_AI_AVAILABLE:
                 total_available = len(filtered)
             if limit:
                 tools = tools[:limit]
-            
+
             # Group by server for better organization with import hints
             by_server: dict[str, list[str]] = {}
             import_hints: dict[str, str] = {}
@@ -336,11 +344,13 @@ if PYDANTIC_AI_AVAILABLE:
                 # Convert tool name to function name (replace dashes with underscores)
                 func_name = t.name.split("__")[-1].replace("-", "_")
                 by_server[server_name].append(func_name)
-            
+
             # Generate import hints for each server
             for server_name, funcs in by_server.items():
-                import_hints[server_name] = f"from generated.mcp.{server_name} import {', '.join(funcs)}"
-            
+                import_hints[server_name] = (
+                    f"from generated.mcp.{server_name} import {', '.join(funcs)}"
+                )
+
             # Add skills import hint if skills are available
             executor = getattr(self, "_executor", None)
             if executor and getattr(executor, "_skills_metadata", None):
@@ -359,7 +369,7 @@ if PYDANTIC_AI_AVAILABLE:
                 "include_deferred": include_deferred,
                 "usage": "Use import_hints to get the correct import statement for execute_code",
             }
-        
+
         async def _search_tools(
             self,
             query: str,
@@ -395,7 +405,7 @@ if PYDANTIC_AI_AVAILABLE:
                         "Tool reranker failed; falling back to registry order: %s",
                         e,
                     )
-            
+
             return {
                 "tools": [
                     {
@@ -412,14 +422,14 @@ if PYDANTIC_AI_AVAILABLE:
                 "total": result.total,
                 "has_more": result.total > limit,
             }
-        
+
         async def _get_tool_details(self, tool_name: str) -> dict[str, Any]:
             """Get detailed information about a tool."""
             tool = self.registry.get_tool(tool_name)
-            
+
             if tool is None:
                 return {"error": f"Tool not found: {tool_name}"}
-            
+
             return {
                 "name": tool.name,
                 "description": tool.description,
@@ -429,11 +439,11 @@ if PYDANTIC_AI_AVAILABLE:
                 "input_examples": tool.input_examples,
                 "defer_loading": tool.defer_loading,
             }
-        
+
         async def _list_servers(self) -> dict[str, Any]:
             """List all connected MCP servers with import paths."""
             servers = await self.registry.list_servers()
-            
+
             # Get tools for each server to provide function names
             server_tools: dict[str, list[str]] = {}
             for tool in self.registry.list_tools(include_deferred=True):
@@ -443,7 +453,7 @@ if PYDANTIC_AI_AVAILABLE:
                 # Convert tool name to function name (replace dashes with underscores)
                 func_name = tool.name.split("__")[-1].replace("-", "_")
                 server_tools[sname].append(func_name)
-            
+
             server_entries = [
                 {
                     "name": s.name,
@@ -467,21 +477,23 @@ if PYDANTIC_AI_AVAILABLE:
                         skill_scripts_summary.append(
                             f"{skill_meta['name']}/{script['name']}: {script.get('description', '')}"
                         )
-                server_entries.append({
-                    "name": "skills",
-                    "description": "Agent skills \u2013 reusable task scripts",
-                    "tool_count": len(skill_funcs),
-                    "import_path": f"from generated.skills import {', '.join(skill_funcs)}",
-                    "functions": skill_funcs,
-                    "available_scripts": skill_scripts_summary,
-                })
+                server_entries.append(
+                    {
+                        "name": "skills",
+                        "description": "Agent skills \u2013 reusable task scripts",
+                        "tool_count": len(skill_funcs),
+                        "import_path": f"from generated.skills import {', '.join(skill_funcs)}",
+                        "functions": skill_funcs,
+                        "available_scripts": skill_scripts_summary,
+                    }
+                )
 
             return {
                 "servers": server_entries,
                 "total": len(server_entries),
                 "usage_hint": "Use the import_path to import tools in execute_code",
             }
-        
+
         async def _execute_code(
             self,
             code: str,
@@ -490,14 +502,18 @@ if PYDANTIC_AI_AVAILABLE:
             """Execute Python code that composes tools."""
             if self._executor is None:
                 return {"success": False, "error": "Executor not initialized"}
-            
+
             try:
                 await self._set_runtime_executing(True)
                 start_time = time.monotonic()
                 # Log full code for debugging (truncate only for single-line display)
-                code_lines = (code or "").strip().split('\n')
+                code_lines = (code or "").strip().split("\n")
                 if len(code_lines) > 1:
-                    logger.info("Codemode execute_code: calling executor.execute() with %d lines:\n%s", len(code_lines), code)
+                    logger.info(
+                        "Codemode execute_code: calling executor.execute() with %d lines:\n%s",
+                        len(code_lines),
+                        code,
+                    )
                 else:
                     logger.info("Codemode execute_code: calling executor.execute() code=%r", code)
                 execution = await self._executor.execute(code, timeout=timeout)
@@ -518,7 +534,7 @@ if PYDANTIC_AI_AVAILABLE:
                 else:
                     logger.info(log_message)
                 elapsed = time.monotonic() - start_time
-                
+
                 error_message = (
                     execution.execution_error
                     if not execution.execution_ok
@@ -562,7 +578,7 @@ if PYDANTIC_AI_AVAILABLE:
                 }
             finally:
                 await self._set_runtime_executing(False)
-        
+
         async def _call_tool(
             self,
             tool_name: str,
@@ -596,7 +612,7 @@ else:
     # Fallback when pydantic-ai is not available
     class CodemodeToolset:  # type: ignore
         """Placeholder when pydantic-ai is not installed."""
-        
+
         def __init__(self, *args, **kwargs):
             raise ImportError(
                 "pydantic-ai is required for CodemodeToolset. "
