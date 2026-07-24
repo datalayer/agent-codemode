@@ -35,8 +35,8 @@ make agent-standard  # Standard MCP mode
 
 The `skills/` folder contains skill definitions that the agent can discover and use:
 
-| Skill | Description |
-|-------|-------------|
+| Skill | Description                                                                       |
+| ----- | --------------------------------------------------------------------------------- |
 | `pdf` | PDF manipulation toolkit - extract text/tables, merge/split documents, fill forms |
 
 ### Example prompts
@@ -66,7 +66,7 @@ If you don't see it, run a prompt that triggers tool discovery (e.g., `/list_too
 ## How Skills Work
 
 1. **Discovery**: The agent discovers skills from the `skills/` folder
-2. **Understanding**: Skills contain SKILL.md with instructions and scripts
-3. **Execution**: The agent uses codemode to execute skill scripts in a sandbox
+1. **Understanding**: Skills contain SKILL.md with instructions and scripts
+1. **Execution**: The agent uses codemode to execute skill scripts in a sandbox
 
 For more on skills, see the [agent-skills](https://github.com/datalayer/agent-skills) repository.

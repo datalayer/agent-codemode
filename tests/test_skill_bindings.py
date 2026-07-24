@@ -10,21 +10,16 @@ These tests verify the full pipeline:
 3. CodemodeToolset post-init callbacks fire after lazy initialisation
 """
 
-import asyncio
-import importlib
-import json
 import sys
-import textwrap
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
 from agent_codemode.discovery.codegen import PythonCodeGenerator
 from agent_codemode.discovery.registry import ToolRegistry
 from agent_codemode.types import CodeModeConfig
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -63,6 +58,7 @@ def generated_dir(tmp_path: Path) -> Path:
 # ---------------------------------------------------------------------------
 # 1. Codegen: generate_skill_bindings produces correct file hierarchy
 # ---------------------------------------------------------------------------
+
 
 class TestGenerateSkillBindings:
     """Test that PythonCodeGenerator.generate_skill_bindings creates
@@ -115,6 +111,7 @@ class TestGenerateSkillBindings:
 # 2. Executor: skills__* routing through set_skill_tool_caller
 # ---------------------------------------------------------------------------
 
+
 class TestExecutorSkillRouting:
     """Test that CodeModeExecutor routes skills__* calls to the caller."""
 
@@ -134,9 +131,7 @@ class TestExecutorSkillRouting:
         mock_caller = AsyncMock(return_value={"result": "ok"})
         executor.set_skill_tool_caller(mock_caller)
 
-        result = await executor.call_tool(
-            "skills__list_skills", {}
-        )
+        result = await executor.call_tool("skills__list_skills", {})
 
         mock_caller.assert_awaited_once_with("skills__list_skills", {})
         assert result == {"result": "ok"}
@@ -184,13 +179,14 @@ class TestExecutorSkillRouting:
 # 3. CodemodeToolset post-init callbacks
 # ---------------------------------------------------------------------------
 
+
 class TestCodemodeToolsetPostInit:
     """Test the post_init_callback mechanism on CodemodeToolset."""
 
     @pytest.mark.asyncio
     async def test_callback_fires_on_ensure_initialized(self, tmp_path: Path):
         """Post-init callback should fire after _ensure_initialized."""
-        from agent_codemode.toolset import CodemodeToolset, PYDANTIC_AI_AVAILABLE
+        from agent_codemode.toolset import PYDANTIC_AI_AVAILABLE, CodemodeToolset
 
         if not PYDANTIC_AI_AVAILABLE:
             pytest.skip("pydantic-ai not installed")
@@ -216,7 +212,7 @@ class TestCodemodeToolsetPostInit:
     @pytest.mark.asyncio
     async def test_callback_not_called_twice(self, tmp_path: Path):
         """Callbacks only fire once even if start() is called twice."""
-        from agent_codemode.toolset import CodemodeToolset, PYDANTIC_AI_AVAILABLE
+        from agent_codemode.toolset import PYDANTIC_AI_AVAILABLE, CodemodeToolset
 
         if not PYDANTIC_AI_AVAILABLE:
             pytest.skip("pydantic-ai not installed")
@@ -241,7 +237,7 @@ class TestCodemodeToolsetPostInit:
     @pytest.mark.asyncio
     async def test_callback_error_does_not_prevent_init(self, tmp_path: Path):
         """A failing callback should log an error but not crash init."""
-        from agent_codemode.toolset import CodemodeToolset, PYDANTIC_AI_AVAILABLE
+        from agent_codemode.toolset import PYDANTIC_AI_AVAILABLE, CodemodeToolset
 
         if not PYDANTIC_AI_AVAILABLE:
             pytest.skip("pydantic-ai not installed")
@@ -272,12 +268,14 @@ class TestCodemodeToolsetPostInit:
 # 3b. generate_skills_in_sandbox embeds catalog
 # ---------------------------------------------------------------------------
 
+
 class TestGenerateSkillsInSandbox:
     """Test that generate_skills_in_sandbox() produces correct bindings
     for Jupyter/remote sandboxes."""
 
     class MockRemoteSandbox:
         """Sandbox mock that captures run_code calls (no _namespaces)."""
+
         def __init__(self):
             self.code_calls: list[str] = []
             self._started = True
@@ -286,6 +284,7 @@ class TestGenerateSkillsInSandbox:
             self.code_calls.append(code)
             exec(compile(code, "<sandbox>", "exec"))
             from code_sandboxes.models import ExecutionResult
+
             return ExecutionResult()
 
         def start(self):
@@ -360,6 +359,7 @@ class TestGenerateSkillsInSandbox:
 # ---------------------------------------------------------------------------
 # 4. Full codegen + import round-trip (no sandbox needed)
 # ---------------------------------------------------------------------------
+
 
 class TestCodegenImportRoundTrip:
     """Verify that generated skill binding files can be imported and

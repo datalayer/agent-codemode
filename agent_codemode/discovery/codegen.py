@@ -10,6 +10,7 @@ tool composition without LLM inference overhead.
 
 import logging
 from pathlib import Path
+
 logger = logging.getLogger(__name__)
 
 from typing import Any
@@ -97,7 +98,7 @@ _tool_caller = None
 
 def set_tool_caller(caller) -> None:
     """Set the global tool caller function.
-    
+
     Args:
         caller: Async function that takes (tool_name, arguments) and returns result.
     """
@@ -107,14 +108,14 @@ def set_tool_caller(caller) -> None:
 
 async def call_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
     """Call an MCP tool.
-    
+
     Args:
         tool_name: Full tool name (server__toolname format).
         arguments: Tool arguments.
-        
+
     Returns:
         Tool result.
-        
+
     Raises:
         RuntimeError: If no tool caller is configured.
     """
@@ -124,7 +125,7 @@ async def call_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
             "Use set_tool_caller() or run through CodeModeExecutor."
         )
     result = await _tool_caller(tool_name, arguments)
-    
+
     # helper to check if something is a list
     if not isinstance(result, (dict, object)) or result is None:
         return result
@@ -142,33 +143,33 @@ async def call_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
         content_list = result.get("content")
     elif hasattr(result, "content"):
         content_list = result.content
-    
+
     if not isinstance(content_list, list):
         return result
 
     # Concatenate text parts
     text_content = ""
     has_text = False
-    
+
     for part in content_list:
         part_type = None
         part_text = None
-        
+
         if isinstance(part, dict):
             part_type = part.get("type")
             part_text = part.get("text")
         elif hasattr(part, "type") and hasattr(part, "text"):
             part_type = part.type
             part_text = part.text
-            
+
         if part_type == "text" and part_text is not None:
             text_content += part_text
             has_text = True
-    
+
     # If this was an error response, raise an exception
     if is_error and has_text:
         raise RuntimeError(text_content)
-            
+
     if has_text:
         # Try to parse as JSON first, as many tools return JSON string
         try:
@@ -176,15 +177,13 @@ async def call_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
             return json.loads(text_content)
         except Exception:
             return text_content
-            
+
     return result
 '''
         client_path = self.output_path / "client.py"
         client_path.write_text(client_code)
 
-    def _generate_server_module(
-        self, server_name: str, tools: list[ToolDefinition]
-    ) -> None:
+    def _generate_server_module(self, server_name: str, tools: list[ToolDefinition]) -> None:
         """Generate a module for a server's tools.
 
         Args:
@@ -201,9 +200,7 @@ async def call_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
         # Generate server index
         self._generate_server_index(server_dir, server_name, tools)
 
-    def _generate_tool_file(
-        self, server_dir: Path, server_name: str, tool: ToolDefinition
-    ) -> None:
+    def _generate_tool_file(self, server_dir: Path, server_name: str, tool: ToolDefinition) -> None:
         """Generate a file for a single tool.
 
         Args:
@@ -213,7 +210,7 @@ async def call_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
         """
         # Extract tool name without server prefix
         if tool.name.startswith(f"{server_name}__"):
-            short_name = tool.name[len(server_name) + 2:]
+            short_name = tool.name[len(server_name) + 2 :]
         else:
             short_name = tool.name
 
@@ -235,18 +232,20 @@ async def call_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
             # Extract the main parameter names from the schema
             schema_props = tool.input_schema.get("properties", {}) if tool.input_schema else {}
             param_names = list(schema_props.keys())
-            
+
             # Build parameter list for flexible functions
             param_list = []
             for prop_name, prop_def in schema_props.items():
                 param_type = self._schema_property_to_type_hint(prop_def)
                 param_list.append(f"    {prop_name}: Optional[{param_type}] = None")
-            
-            param_signature = ",\n".join(param_list) + ",\n    **kwargs: Any" if param_list else "**kwargs: Any"
-            
+
+            param_signature = (
+                ",\n".join(param_list) + ",\n    **kwargs: Any" if param_list else "**kwargs: Any"
+            )
+
             # Generate flexible call logic
             call_logic = self._generate_flexible_call_logic(param_names)
-            
+
             code = f'''# Auto-generated tool binding for {tool.name}
 # Copyright (c) 2025-2026 Datalayer, Inc.
 # BSD 3-Clause License
@@ -311,7 +310,7 @@ async def {func_name}(arguments: Optional[{input_type}] = None, **kwargs: Any) -
 
         for tool in tools:
             if tool.name.startswith(f"{server_name}__"):
-                short_name = tool.name[len(server_name) + 2:]
+                short_name = tool.name[len(server_name) + 2 :]
             else:
                 short_name = tool.name
             func_name = self._sanitize_name(short_name)
@@ -412,6 +411,7 @@ __all__ = {server_names!r}
 
         # Embed the skill catalog as a constant so list_skills is self-contained
         import json as _json
+
         skill_catalog_json = _json.dumps(skills, ensure_ascii=False, indent=2)
 
         # --- list_skills ---
@@ -582,7 +582,10 @@ __all__ = [
 '''
         (skills_dir / "__init__.py").write_text(init_code)
 
-        logger.info("Generated skill bindings: list_skills, load_skill, read_skill_resource, run_skill")
+        logger.info(
+            "Generated skill bindings: list_skills, load_skill, read_skill_resource, run_skill"
+        )
+
     def _sanitize_name(self, name: str) -> str:
         """Sanitize a name to be a valid Python identifier.
 
@@ -606,6 +609,7 @@ __all__ = [
 
         # Handle Python keywords
         import keyword
+
         if keyword.iskeyword(result):
             result = result + "_"
 
@@ -653,9 +657,7 @@ __all__ = [
         """
         import re
 
-        return bool(
-            re.search(r"^\s*(Args|Returns|Raises|Yields)\s*:", text, re.MULTILINE)
-        )
+        return bool(re.search(r"^\s*(Args|Returns|Raises|Yields)\s*:", text, re.MULTILINE))
 
     def _generate_docstring(self, tool: ToolDefinition) -> str:
         """Generate a docstring for a tool function.
@@ -711,10 +713,12 @@ __all__ = [
             lines.append("    Tool execution result.")
 
         return "\n    ".join(lines)
-    
-    def _add_schema_description(self, lines: list[str], schema: dict[str, Any], indent: str) -> None:
+
+    def _add_schema_description(
+        self, lines: list[str], schema: dict[str, Any], indent: str
+    ) -> None:
         """Add schema description to docstring lines.
-        
+
         Args:
             lines: List of docstring lines to append to
             schema: JSON Schema to describe
@@ -722,7 +726,7 @@ __all__ = [
         """
         if not schema:
             return
-            
+
         schema_type = schema.get("type")
         if schema_type == "object" and "properties" in schema:
             lines.append(f"{indent}Object with properties:")
@@ -746,46 +750,47 @@ __all__ = [
 
     def _needs_flexible_parameters(self, schema: dict[str, Any]) -> bool:
         """Check if a tool schema needs flexible parameter handling.
-        
+
         Returns True if the schema has properties that suggest it needs
         individual parameter handling (like tool_name + arguments pattern).
-        
+
         Args:
             schema: Tool input schema
-            
+
         Returns:
             True if flexible parameters are needed
         """
         if not schema or "properties" not in schema:
             return False
-            
+
         props = schema["properties"]
-        
+
         # Check for common patterns that need flexible handling:
-        # 1. Has both "tool_name" and "arguments" 
+        # 1. Has both "tool_name" and "arguments"
         # 2. Has "function_name" or "method_name" with "arguments"/"parameters"
         # 3. Any combination that suggests nested tool calling
-        
-        has_tool_identifier = any(key in props for key in [
-            "tool_name", "function_name", "method_name", "action", "command"
-        ])
-        has_arguments = any(key in props for key in [
-            "arguments", "parameters", "args", "params", "input", "data"
-        ])
-        
+
+        has_tool_identifier = any(
+            key in props
+            for key in ["tool_name", "function_name", "method_name", "action", "command"]
+        )
+        has_arguments = any(
+            key in props for key in ["arguments", "parameters", "args", "params", "input", "data"]
+        )
+
         return has_tool_identifier and has_arguments
-    
+
     def _schema_property_to_type_hint(self, prop_def: dict[str, Any]) -> str:
         """Convert a single JSON Schema property to Python type hint.
-        
+
         Args:
             prop_def: Property definition from JSON Schema
-            
+
         Returns:
             Python type hint string
         """
         prop_type = prop_def.get("type", "any")
-        
+
         if prop_type == "string":
             return "str"
         elif prop_type == "number":
@@ -800,19 +805,19 @@ __all__ = [
             return "dict[str, Any]"
         else:
             return "Any"
-    
+
     def _generate_flexible_call_logic(self, param_names: list[str]) -> str:
         """Generate the call logic for flexible parameter functions.
-        
+
         Args:
             param_names: List of parameter names from schema
-            
+
         Returns:
             Indented Python code for parameter handling
         """
         lines = [
             "    # Support both calling styles:",
-            "    # 1. Natural keyword arguments: func(param1=val1, param2=val2)",  
+            "    # 1. Natural keyword arguments: func(param1=val1, param2=val2)",
             "    # 2. Single arguments dict: func(arguments={'param1': val1, 'param2': val2})",
             "    ",
             "    # Check if any schema parameters were provided directly",
@@ -823,7 +828,7 @@ __all__ = [
             "        call_args = direct_params",
             "        call_args.update(kwargs)",
             "    elif 'arguments' in kwargs and isinstance(kwargs['arguments'], dict):",
-            "        # Style 2: Single arguments dict provided", 
+            "        # Style 2: Single arguments dict provided",
             "        call_args = kwargs['arguments'].copy()",
             "        # Add any other kwargs that aren't 'arguments'",
             "        call_args.update({k: v for k, v in kwargs.items() if k != 'arguments'})",
@@ -831,5 +836,5 @@ __all__ = [
             "        # Fallback: use kwargs as arguments",
             "        call_args = kwargs",
         ]
-        
+
         return "\n".join(lines)

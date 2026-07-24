@@ -19,11 +19,13 @@ directly without LLM inference overhead.
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable
+from inspect import isawaitable
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 if TYPE_CHECKING:
-    from ..discovery.registry import ToolRegistry
     from ..composition.executor import CodeModeExecutor
+    from ..discovery.registry import ToolRegistry
 
 from ..types import ToolDefinition
 
@@ -31,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 
 # Type for AI tool selector function
-AIToolSelector = Callable[[str, list[dict[str, Any]]], list[str]]
+AIToolSelector = Callable[[str, list[dict[str, Any]]], list[str] | Awaitable[list[str]]]
 
 
 class MetaToolProvider:
@@ -55,10 +57,10 @@ class MetaToolProvider:
 
         # Fast listing
         names = provider.list_tool_names(keywords=["file", "read"])
-        
+
         # AI-powered search
         tools = await provider.search_tools("read CSV files and analyze data")
-        
+
         # Execute code
         result = await provider.execute_code('''
             from generated.mcp.filesystem import read_file
@@ -107,15 +109,13 @@ class MetaToolProvider:
         """
         # Get all tools
         all_tools = self.registry.list_tools(server=server, include_deferred=include_deferred)
-        
+
         # Use AI selector if available
         if self._ai_selector and query:
-            tool_list = [
-                {"name": t.name, "description": t.description}
-                for t in all_tools
-            ]
+            tool_list = [{"name": t.name, "description": t.description} for t in all_tools]
             try:
-                selected_names = await self._ai_selector(query, tool_list)
+                selected = self._ai_selector(query, tool_list)
+                selected_names = await selected if isawaitable(selected) else selected
                 all_tools = [t for t in all_tools if t.name in selected_names]
             except Exception as e:
                 logger.debug(
@@ -125,7 +125,7 @@ class MetaToolProvider:
                 all_tools = self._keyword_filter(all_tools, query)
         elif query:
             all_tools = self._keyword_filter(all_tools, query)
-        
+
         # Apply limit
         tools = all_tools[:limit]
 
@@ -144,10 +144,8 @@ class MetaToolProvider:
                 for tool in tools
             ],
         }
-    
-    def _keyword_filter(
-        self, tools: list[ToolDefinition], query: str
-    ) -> list[ToolDefinition]:
+
+    def _keyword_filter(self, tools: list[ToolDefinition], query: str) -> list[ToolDefinition]:
         """Filter tools by keywords in query.
 
         Args:
@@ -159,7 +157,7 @@ class MetaToolProvider:
         """
         query_lower = query.lower()
         keywords = query_lower.split()
-        
+
         scored_tools = []
         for tool in tools:
             tool_text = f"{tool.name} {tool.description or ''}".lower()
@@ -167,7 +165,7 @@ class MetaToolProvider:
             score = sum(1 for kw in keywords if kw in tool_text)
             if score > 0:
                 scored_tools.append((score, tool))
-        
+
         # Sort by score descending
         scored_tools.sort(key=lambda x: x[0], reverse=True)
         return [t for _, t in scored_tools]
@@ -317,9 +315,7 @@ class MetaToolProvider:
             },
             {
                 "name": "list_tool_names",
-                "description": (
-                    "List available tool names. Fast way to see what tools exist."
-                ),
+                "description": ("List available tool names. Fast way to see what tools exist."),
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -342,9 +338,7 @@ class MetaToolProvider:
             },
             {
                 "name": "get_tool_definition",
-                "description": (
-                    "Get the full definition and schema of a specific tool."
-                ),
+                "description": ("Get the full definition and schema of a specific tool."),
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -360,39 +354,39 @@ class MetaToolProvider:
 
         # Add execute_code if executor is available
         if self.executor is not None:
-            tools.append({
-                "name": "execute_code",
-                "description": (
-                    "Execute Python code that composes MCP tools. "
-                    "The code can import from generated tool bindings and "
-                    "call multiple tools efficiently. Use this for complex "
-                    "operations that require loops, conditionals, or state."
-                ),
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "code": {
-                            "type": "string",
-                            "description": (
-                                "Python code to execute. Can use async/await "
-                                "and import from generated.mcp.*"
-                            ),
+            tools.append(
+                {
+                    "name": "execute_code",
+                    "description": (
+                        "Execute Python code that composes MCP tools. "
+                        "The code can import from generated tool bindings and "
+                        "call multiple tools efficiently. Use this for complex "
+                        "operations that require loops, conditionals, or state."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "code": {
+                                "type": "string",
+                                "description": (
+                                    "Python code to execute. Can use async/await "
+                                    "and import from generated.mcp.*"
+                                ),
+                            },
+                            "timeout": {
+                                "type": "number",
+                                "description": "Execution timeout in seconds (default: 60)",
+                                "default": 60,
+                            },
                         },
-                        "timeout": {
-                            "type": "number",
-                            "description": "Execution timeout in seconds (default: 60)",
-                            "default": 60,
-                        },
+                        "required": ["code"],
                     },
-                    "required": ["code"],
-                },
-            })
+                }
+            )
 
         return tools
 
-    async def handle_tool_call(
-        self, tool_name: str, arguments: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def handle_tool_call(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Handle a meta-tool call.
 
         Args:

@@ -33,7 +33,13 @@ pydantic-ai = [
   "pydantic-graph>=1.94.0",
   "pydantic-ai-slim>=1.94.0",
 ]
-test = ["ipykernel", "jupyter_server>=1.6,<3", "pytest>=7.0", "pytest-asyncio>=0.21"]
+test = [
+  "ipykernel",
+  "jupyter_server>=1.6,<3",
+  "pytest>=7.0",
+  "pytest-asyncio>=0.21",
+  "pytest-cov>=4.1",
+]
 lint = ["mdformat>0.7", "mdformat-gfm>=0.3.5", "ruff"]
 typing = ["mypy>=0.990"]
 
@@ -103,4 +109,20 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 # S101 Use of `assert` detected
-"agent_codemode/tests/*" = ["S101"]
+"tests/*" = ["S101"]
+"tests/test_stdout_capture.py" = ["S101", "T201", "E501"]
+"tests/test_direct_execution.py" = ["T201"]
+"tests/test_executor_async.py" = ["T201"]
+"tests/test_skill_bindings.py" = ["S102", "F841"]
+"tests/test_agent_minimal.py" = ["T201"]
+"tests/test_codemode.py" = ["E731", "E501"]
+"skills/**/scripts/*.py" = ["E501", "C901", "T201", "RUF013", "E741"]
+"examples/skills/skills/**/scripts/*.py" = ["E501", "C901", "T201", "RUF013", "E741"]
+"examples/**/*.py" = ["T201", "S108", "S311", "UP007", "E501", "C901", "E741", "RUF013", "S110", "C408", "F841", "F821"]
+"agent_codemode/toolset.py" = ["UP007", "E501", "C901"]
+"agent_codemode/types.py" = ["UP007"]
+"agent_codemode/proxy/mcp_client.py" = ["S110"]
+"agent_codemode/proxy/meta_tools.py" = ["UP007"]
+"agent_codemode/tool_definitions.py" = ["E501"]
+"agent_codemode/discovery/codegen.py" = ["RUF001", "RUF002", "E501", "B007", "E402"]
+"agent_codemode/composition/executor.py" = ["E501", "S108", "C901", "S102", "T201", "B007"]

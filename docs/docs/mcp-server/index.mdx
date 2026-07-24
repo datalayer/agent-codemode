@@ -136,7 +136,7 @@ result = await client.call_tool("save_skill", {
     "code": '''
 async def batch_uppercase(input_dir, output_dir):
     from generated.mcp.filesystem import list_directory, read_file, write_file
-    
+
     entries = await list_directory({"path": input_dir})
     for entry in entries["entries"]:
         content = await read_file({"path": f"{input_dir}/{entry}"})
@@ -256,8 +256,8 @@ Build an agent that uses Codemode to intelligently compose tools:
 ```
 User: "Analyze all Python files in /project and create a summary report"
 
-Agent: 
-1. Calls search_tools("python file analysis") 
+Agent:
+1. Calls search_tools("python file analysis")
 2. Discovers filesystem and analysis tools
 3. Writes code that reads files, analyzes them, generates report
 4. Calls execute_code with the generated code

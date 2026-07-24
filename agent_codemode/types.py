@@ -62,7 +62,7 @@ class ToolDefinition(BaseModel):
     server_url: str = ""
 
     @model_validator(mode="after")
-    def _unwrap_fastmcp_output_schema(self) -> "ToolDefinition":
+    def _unwrap_fastmcp_output_schema(self) -> ToolDefinition:
         """Unwrap FastMCP's artificial ``x-fastmcp-wrap-result`` wrapper.
 
         FastMCP wraps simple return types (e.g. ``str``) in an object schema
@@ -72,11 +72,7 @@ class ToolDefinition(BaseModel):
         inner type).  Unwrap it so every consumer sees the real schema.
         """
         schema = self.output_schema
-        if (
-            schema
-            and schema.get("x-fastmcp-wrap-result")
-            and schema.get("type") == "object"
-        ):
+        if schema and schema.get("x-fastmcp-wrap-result") and schema.get("type") == "object":
             props = schema.get("properties", {})
             if "result" in props:
                 # Replace with the inner type schema
@@ -198,8 +194,14 @@ class CodeModeConfig(BaseModel):
         workspace_path: Path for workspace files.
         skills_path: Path for saved skills.
         generated_path: Path for generated code bindings.
-        sandbox_variant: Which sandbox to use for execution.
+        sandbox_variant: Which sandbox to use for execution. One of the
+            code-sandboxes variants: ``eval`` (in-process, default),
+            ``monty`` (secure in-process interpreter), ``docker``,
+            ``jupyter``, ``colab``, ``kaggle``, ``modal``, or ``datalayer``.
         sandbox_image: Optional sandbox image (for Docker-based sandboxes).
+        sandbox_gpu: Optional GPU flavor / accelerator for supported sandboxes
+            (for example Modal/Datalayer: ``T4``, ``A100``; Kaggle batch:
+            ``NvidiaTeslaT4`` or alias ``T4``).
         allow_direct_tool_calls: Whether to expose call_tool in the toolset.
         max_tool_calls: Optional safety cap for tool calls per execute() run.
         skills_directories: Directories to scan for skill definitions.
@@ -211,9 +213,9 @@ class CodeModeConfig(BaseModel):
             HTTP to this URL instead of trying to use stdio. This enables
             the two-container architecture where MCP servers run in the
             agent-runtimes container and code executes in a Jupyter container.
-            
+
             Example: "http://agent-runtimes:8765/api/v1/mcp/proxy"
-            
+
             For local development with local Jupyter:
             "http://localhost:8765/api/v1/mcp/proxy"
     """
@@ -225,6 +227,7 @@ class CodeModeConfig(BaseModel):
     generated_path: str = "./generated"
     sandbox_variant: str = "eval"
     sandbox_image: str | None = None
+    sandbox_gpu: str | None = None
     allow_direct_tool_calls: bool = False
     max_tool_calls: int | None = None
     skills_directories: list[str] = Field(default_factory=list)

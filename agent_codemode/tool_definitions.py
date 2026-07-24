@@ -141,13 +141,13 @@ TOOL_SCHEMAS = {
 
 def get_tool_schema(tool_name: str) -> dict[str, Any]:
     """Get the schema for a specific tool.
-    
+
     Args:
         tool_name: Name of the tool
-        
+
     Returns:
         Dictionary with 'description' and 'parameters' keys
-        
+
     Raises:
         KeyError: If tool not found
     """

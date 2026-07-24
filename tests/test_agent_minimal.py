@@ -2,39 +2,40 @@
 """Minimal test for agent with fixed sandbox."""
 
 import asyncio
-from pathlib import Path
 
 # Add parent directory to path for imports
 import sys
+from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent))
 
 from agent_codemode import CodeModeExecutor, ToolRegistry
-from agent_codemode.types import MCPServerConfig, CodeModeConfig
+from agent_codemode.types import CodeModeConfig, MCPServerConfig
+
 
 async def main():
     print("=== Testing CodeModeExecutor with fixed sandbox ===\n")
-    
+
     # Set up registry with example MCP server
     registry = ToolRegistry()
     server_config = MCPServerConfig(
         name="example_mcp",
         command="mcp-run",
         args=["./example_server.py"],
-        cwd=str(Path(__file__).parent / "examples" / "agent")
+        cwd=str(Path(__file__).parent / "examples" / "agent"),
     )
     registry.add_server(server_config)
     await registry.discover_all()
-    
+
     print(f"Registered tools: {[tool.name for tool in registry.list_tools()]}\n")
-    
+
     # Create executor
     config = CodeModeConfig(
-        workspace_path=Path(__file__).parent / "examples" / "agent",
-        sandbox_variant="eval"
+        workspace_path=Path(__file__).parent / "examples" / "agent", sandbox_variant="eval"
     )
     executor = CodeModeExecutor(registry=registry, config=config)
     await executor.setup()
-    
+
     # Test code execution
     code = """
 from generated.mcp.example_mcp import generate_random_text
@@ -46,20 +47,21 @@ try:
 except Exception as e:
     print(f"Error: {e}")
 """
-    
+
     print("=== Executing code ===")
     print(code)
     print("\n=== Output ===")
-    
+
     execution = await executor.execute(code)
-    
+
     print(f"Stdout: {execution.stdout}")
     print(f"Stderr: {execution.stderr}")
     print(f"Error: {execution.error}")
     print(f"Success: {not execution.error}")
-    
+
     await executor.cleanup()
     print("\n=== Test completed ===")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

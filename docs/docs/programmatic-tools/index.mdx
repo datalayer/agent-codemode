@@ -34,7 +34,7 @@ await executor.setup()
 # Execute code
 result = await executor.execute("""
     from generated.mcp.filesystem import read_file
-    
+
     content = await read_file({"path": "/tmp/data.txt"})
     print(f"Read {len(content)} characters")
 """)
@@ -110,7 +110,7 @@ Call tools one after another:
 ```python
 result = await executor.execute("""
     from generated.mcp.filesystem import read_file, write_file
-    
+
     # Read, transform, write
     content = await read_file({"path": "/input.txt"})
     transformed = content.upper()
@@ -152,14 +152,14 @@ Use `asyncio.gather` for concurrent tool calls:
 result = await executor.execute("""
     import asyncio
     from generated.mcp.filesystem import read_file
-    
+
     files = ["a.txt", "b.txt", "c.txt", "d.txt"]
-    
+
     # Read all files in parallel
     contents = await asyncio.gather(*[
         read_file({"path": f"/data/{f}"}) for f in files
     ])
-    
+
     total = sum(len(c) for c in contents)
     print(f"Total: {total} characters from {len(files)} files")
 """)
@@ -173,7 +173,7 @@ Use if/else for decision making:
 result = await executor.execute("""
     from generated.mcp.filesystem import read_file, write_file
     from generated.mcp.web import fetch_url
-    
+
     # Try local file first, fall back to web
     try:
         content = await read_file({"path": "/cache/data.json"})
@@ -192,9 +192,9 @@ Process collections of items:
 ```python
 result = await executor.execute("""
     from generated.mcp.filesystem import list_directory, read_file
-    
+
     entries = await list_directory({"path": "/documents"})
-    
+
     for entry in entries["entries"]:
         if entry.endswith(".md"):
             content = await read_file({"path": f"/documents/{entry}"})
@@ -210,17 +210,17 @@ Use try/except for robust execution:
 ```python
 result = await executor.execute("""
     from generated.mcp.filesystem import read_file, write_file
-    
+
     files = ["important.txt", "optional.txt", "extra.txt"]
     results = []
-    
+
     for f in files:
         try:
             content = await read_file({"path": f"/data/{f}"})
             results.append({"file": f, "status": "success", "size": len(content)})
         except Exception as e:
             results.append({"file": f, "status": "failed", "error": str(e)})
-    
+
     successful = [r for r in results if r["status"] == "success"]
     print(f"Processed {len(successful)}/{len(files)} files")
 """)
@@ -243,19 +243,27 @@ This means you get the safety and isolation of MCP servers while writing natural
 from agent_codemode import CodeModeConfig, CodeModeExecutor
 
 config = CodeModeConfig(
-    sandbox_variant="local",           # "local" or "datalayer-runtime"
+    sandbox_variant="eval",            # eval | monty | docker | jupyter | colab | kaggle | modal | datalayer
     workspace_path="/workspace",       # Working directory
     generated_path="/tmp/generated",   # Where to put generated bindings
-    default_timeout=30.0,              # Default execution timeout
 )
 
 executor = CodeModeExecutor(registry, config=config)
+
+# Set timeout per execution
+result = await executor.execute(code, timeout=30.0)
 ```
 
 ### Sandbox Variants
 
-- **local**: Runs in a subprocess on the same machine
-- **datalayer-runtime**: Runs in a cloud-based Datalayer Runtime
+- **eval**: In-process Python execution on the same machine (default)
+- **monty**: Secure in-process interpreter (pydantic-monty)
+- **docker**: Docker container with an isolated kernel
+- **jupyter**: Jupyter Server with a persistent kernel
+- **colab**: Google Colab runtime (existing running kernel reuse only)
+- **kaggle**: Kaggle runtime (API-token kernel creation or existing kernel session)
+- **modal**: Modal cloud containers (optional GPU)
+- **datalayer**: Cloud-based Datalayer Runtime
 
 ### Available in Sandbox
 

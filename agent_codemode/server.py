@@ -21,7 +21,7 @@ Based on:
 
 import json
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import anyio
 import mcp.types as types
@@ -47,15 +47,15 @@ def configure(
     registry: Optional[ToolRegistry] = None,
 ) -> None:
     """Configure the Codemode MCP server.
-    
+
     Args:
         config: Configuration for the server.
         registry: Optional pre-configured tool registry.
     """
     global _registry, _executor, _config
-    
+
     _config = config or CodeModeConfig()
-    
+
     if registry is not None:
         logger.debug(f"Using provided registry with {len(registry._servers)} servers")
         logger.debug(f"Server names: {list(registry._servers.keys())}")
@@ -63,9 +63,9 @@ def configure(
     else:
         logger.debug("Creating new empty registry")
         _registry = ToolRegistry()
-    
+
     _executor = CodeModeExecutor(_registry, _config)
-    
+
     logger.info(f"Codemode MCP server configured with {len(_registry._servers)} servers")
 
 
@@ -77,6 +77,8 @@ def get_registry() -> ToolRegistry:
         configure()
     else:
         logger.debug(f"Returning existing registry with {len(_registry._servers)} servers")
+    if _registry is None:
+        raise RuntimeError("Tool registry is not configured")
     return _registry
 
 
@@ -85,6 +87,8 @@ def get_executor() -> CodeModeExecutor:
     global _executor
     if _executor is None:
         configure()
+    if _executor is None:
+        raise RuntimeError("Code executor is not configured")
     return _executor
 
 
@@ -92,99 +96,113 @@ def get_executor() -> CodeModeExecutor:
 # Tool Definitions
 # =============================================================================
 
+
 def _build_tools() -> list[types.Tool]:
     """Build MCP tool definitions from shared schemas."""
     from .tool_definitions import TOOL_SCHEMAS
-    
+
     tools = []
-    
+
     # Core codemode tools
-    for name in ["search_tools", "list_tool_names", "list_servers", "get_tool_details", 
-                 "execute_code", "call_tool"]:
+    for name in [
+        "search_tools",
+        "list_tool_names",
+        "list_servers",
+        "get_tool_details",
+        "execute_code",
+        "call_tool",
+    ]:
         schema = TOOL_SCHEMAS[name]
-        tools.append(types.Tool(
-            name=name,
-            description=schema["description"],
-            inputSchema=schema["parameters"],
-        ))
-    
+        description = cast(str | None, schema.get("description"))
+        parameters = cast(dict[str, Any], schema.get("parameters", {}))
+        tools.append(
+            types.Tool(
+                name=name,
+                description=description,
+                inputSchema=parameters,
+            )
+        )
+
     # Skill management tools
-    tools.extend([
-        types.Tool(
-            name="save_skill",
-            description="Save a reusable skill (code-based tool composition).",
-            inputSchema={
-                "type": "object",
-                "required": ["name", "code", "description"],
-                "properties": {
-                    "name": {"type": "string", "description": "Unique skill name"},
-                    "code": {"type": "string", "description": "Python code"},
-                    "description": {"type": "string", "description": "What the skill does"},
-                    "tags": {"type": "array", "items": {"type": "string"}},
-                    "parameters": {"type": "object"},
+    tools.extend(
+        [
+            types.Tool(
+                name="save_skill",
+                description="Save a reusable skill (code-based tool composition).",
+                inputSchema={
+                    "type": "object",
+                    "required": ["name", "code", "description"],
+                    "properties": {
+                        "name": {"type": "string", "description": "Unique skill name"},
+                        "code": {"type": "string", "description": "Python code"},
+                        "description": {"type": "string", "description": "What the skill does"},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                        "parameters": {"type": "object"},
+                    },
                 },
-            },
-        ),
-        types.Tool(
-            name="run_skill",
-            description="Execute a saved skill.",
-            inputSchema={
-                "type": "object",
-                "required": ["name"],
-                "properties": {
-                    "name": {"type": "string", "description": "Skill name"},
-                    "arguments": {"type": "object"},
+            ),
+            types.Tool(
+                name="run_skill",
+                description="Execute a saved skill.",
+                inputSchema={
+                    "type": "object",
+                    "required": ["name"],
+                    "properties": {
+                        "name": {"type": "string", "description": "Skill name"},
+                        "arguments": {"type": "object"},
+                    },
                 },
-            },
-        ),
-        types.Tool(
-            name="list_skills",
-            description="List available skills.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "tags": {"type": "array", "items": {"type": "string"}},
+            ),
+            types.Tool(
+                name="list_skills",
+                description="List available skills.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                    },
                 },
-            },
-        ),
-        types.Tool(
-            name="delete_skill",
-            description="Delete a saved skill.",
-            inputSchema={
-                "type": "object",
-                "required": ["name"],
-                "properties": {
-                    "name": {"type": "string"},
+            ),
+            types.Tool(
+                name="delete_skill",
+                description="Delete a saved skill.",
+                inputSchema={
+                    "type": "object",
+                    "required": ["name"],
+                    "properties": {
+                        "name": {"type": "string"},
+                    },
                 },
-            },
-        ),
-        types.Tool(
-            name="get_execution_history",
-            description="Get recent tool execution history.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "limit": {"type": "integer", "default": 10},
+            ),
+            types.Tool(
+                name="get_execution_history",
+                description="Get recent tool execution history.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "limit": {"type": "integer", "default": 10},
+                    },
                 },
-            },
-        ),
-        types.Tool(
-            name="add_mcp_server",
-            description="Add a new MCP server to discover tools from.",
-            inputSchema={
-                "type": "object",
-                "required": ["name"],
-                "properties": {
-                    "name": {"type": "string"},
-                    "url": {"type": "string"},
-                    "command": {"type": "string"},
-                    "args": {"type": "array", "items": {"type": "string"}},
+            ),
+            types.Tool(
+                name="add_mcp_server",
+                description="Add a new MCP server to discover tools from.",
+                inputSchema={
+                    "type": "object",
+                    "required": ["name"],
+                    "properties": {
+                        "name": {"type": "string"},
+                        "url": {"type": "string"},
+                        "command": {"type": "string"},
+                        "args": {"type": "array", "items": {"type": "string"}},
+                    },
                 },
-            },
-        ),
-    ])
-    
+            ),
+        ]
+    )
+
     return tools
+
 
 TOOLS = _build_tools()
 
@@ -192,6 +210,7 @@ TOOLS = _build_tools()
 # =============================================================================
 # Tool Handlers
 # =============================================================================
+
 
 async def handle_search_tools(arguments: dict[str, Any]) -> dict[str, Any]:
     """Search for available tools matching a query."""
@@ -205,12 +224,12 @@ async def handle_search_tools(arguments: dict[str, Any]) -> dict[str, Any]:
     result = await registry.search_tools(
         query, server=server, limit=limit, include_deferred=include_deferred
     )
-    
+
     # Filter by category if specified
     tools = result.tools
     if category:
         tools = [t for t in tools if category.lower() in (t.description or "").lower()]
-    
+
     return {
         "tools": [
             {
@@ -233,7 +252,7 @@ async def handle_list_servers(arguments: dict[str, Any]) -> dict[str, Any]:
     """List all connected MCP servers."""
     registry = get_registry()
     servers = await registry.list_servers()
-    
+
     return {
         "servers": [
             {
@@ -262,7 +281,7 @@ async def handle_list_tool_names(arguments: dict[str, Any]) -> dict[str, Any]:
         include_deferred=include_deferred,
     )
     total = len(registry.list_tools(server=server, include_deferred=include_deferred))
-    
+
     return {
         "tool_names": names,
         "returned": len(names),
@@ -276,10 +295,10 @@ async def handle_get_tool_details(arguments: dict[str, Any]) -> dict[str, Any]:
     tool_name = arguments["tool_name"]
     registry = get_registry()
     tool = registry.get_tool(tool_name)
-    
+
     if tool is None:
         return {"error": f"Tool not found: {tool_name}"}
-    
+
     return {
         "name": tool.name,
         "description": tool.description,
@@ -298,16 +317,16 @@ async def handle_execute_code(arguments: dict[str, Any]) -> dict[str, Any]:
     context = arguments.get("context")
 
     executor = get_executor()
-    
+
     # Ensure executor is set up
     if not executor._setup_done:
         await executor.setup()
-    
+
     # Inject context variables if provided
     if context and executor._sandbox:
         for name, value in context.items():
             executor._sandbox.set_variable(name, value)
-    
+
     try:
         execution = await executor.execute(code, timeout=timeout)
         error_message = (
@@ -319,7 +338,7 @@ async def handle_execute_code(arguments: dict[str, Any]) -> dict[str, Any]:
             if execution.code_error
             else None
         )
-        
+
         return {
             "success": execution.success,
             "execution_ok": execution.execution_ok,
@@ -346,7 +365,7 @@ async def handle_call_tool(arguments: dict[str, Any]) -> dict[str, Any]:
     tool_arguments = arguments["arguments"]
 
     executor = get_executor()
-    
+
     try:
         result = await executor.call_tool(tool_name, tool_arguments)
         return {
@@ -365,8 +384,8 @@ async def handle_call_tool(arguments: dict[str, Any]) -> dict[str, Any]:
 
 async def handle_save_skill(arguments: dict[str, Any]) -> dict[str, Any]:
     """Save a reusable skill (code-based tool composition)."""
-    from agent_skills import SkillsManager
-    
+    from agent_skills import SkillsManager  # type: ignore[import-untyped]
+
     name = arguments["name"]
     code = arguments["code"]
     description = arguments["description"]
@@ -374,9 +393,11 @@ async def handle_save_skill(arguments: dict[str, Any]) -> dict[str, Any]:
 
     config = _config or CodeModeConfig()
     manager = SkillsManager(config.skills_path)
-    
+
     try:
-        manager.create(name=name, description=description, content=code, python_code=code, tags=tags)
+        manager.create(
+            name=name, description=description, content=code, python_code=code, tags=tags
+        )
         return {
             "success": True,
             "skill_id": name,
@@ -396,7 +417,7 @@ async def handle_run_skill(arguments: dict[str, Any]) -> dict[str, Any]:
     skill_arguments = arguments.get("arguments")
 
     executor = get_executor()
-    
+
     try:
         execution = await executor.execute_skill(name, skill_arguments)
         error_message = (
@@ -408,7 +429,7 @@ async def handle_run_skill(arguments: dict[str, Any]) -> dict[str, Any]:
             if execution.code_error
             else None
         )
-        
+
         return {
             "success": execution.success,
             "execution_ok": execution.execution_ok,
@@ -434,14 +455,14 @@ async def handle_run_skill(arguments: dict[str, Any]) -> dict[str, Any]:
 async def handle_list_skills(arguments: dict[str, Any]) -> dict[str, Any]:
     """List available skills."""
     from agent_skills import SkillsManager
-    
+
     tags = arguments.get("tags")
 
     config = _config or CodeModeConfig()
     manager = SkillsManager(config.skills_path)
-    
+
     skills = manager.list(tags=tags)
-    
+
     return {
         "skills": [
             {
@@ -458,15 +479,15 @@ async def handle_list_skills(arguments: dict[str, Any]) -> dict[str, Any]:
 async def handle_delete_skill(arguments: dict[str, Any]) -> dict[str, Any]:
     """Delete a saved skill."""
     from agent_skills import SkillsManager
-    
+
     name = arguments["name"]
 
     config = _config or CodeModeConfig()
     manager = SkillsManager(config.skills_path)
-    
+
     skill = manager.get(name)
     success = manager.delete(skill.skill_id) if skill and skill.skill_id else False
-    
+
     return {
         "success": success,
         "error": None if success else f"Skill not found: {name}",
@@ -479,7 +500,7 @@ async def handle_get_execution_history(arguments: dict[str, Any]) -> dict[str, A
 
     executor = get_executor()
     history = executor.tool_call_history[-limit:]
-    
+
     return {
         "history": [
             {
@@ -496,15 +517,15 @@ async def handle_get_execution_history(arguments: dict[str, Any]) -> dict[str, A
 
 async def handle_add_mcp_server(arguments: dict[str, Any]) -> dict[str, Any]:
     """Add a new MCP server to discover tools from."""
-    from .models import MCPServerConfig
-    
+    from .models import MCPServerConfig  # type: ignore[import-untyped]
+
     name = arguments["name"]
     url = arguments.get("url")
     command = arguments.get("command")
     args = arguments.get("args", [])
 
     registry = get_registry()
-    
+
     if url:
         config = MCPServerConfig(
             name=name,
@@ -522,13 +543,13 @@ async def handle_add_mcp_server(arguments: dict[str, Any]) -> dict[str, Any]:
             "tools_discovered": 0,
             "error": "Either url or command must be provided",
         }
-    
+
     try:
         registry.add_server(config)
         await registry.discover_server(name)
-        
+
         tools = registry.list_tools(server=name)
-        
+
         return {
             "success": True,
             "tools_discovered": len(tools),
@@ -566,6 +587,7 @@ TOOL_HANDLERS = {
 # MCP Server Handlers
 # =============================================================================
 
+
 @mcp.list_tools()
 async def list_tools() -> list[types.Tool]:
     """Return the list of available tools."""
@@ -581,7 +603,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
     handler = TOOL_HANDLERS.get(name)
     if handler is None:
         raise ValueError(f"Unknown tool: {name}")
-    
+
     result = await handler(arguments)
     json_str = json.dumps(result, indent=2)
     return [types.TextContent(type="text", text=json_str)]
@@ -591,9 +613,10 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
 # Server Entry Points
 # =============================================================================
 
+
 def run(transport: str = "stdio", host: str = "127.0.0.1", port: int = 8000) -> None:
     """Run the MCP server.
-    
+
     Args:
         transport: Transport type - "stdio" or "streamable-http" (default: "stdio").
         host: Host for HTTP transport (default: "127.0.0.1").
@@ -603,17 +626,18 @@ def run(transport: str = "stdio", host: str = "127.0.0.1", port: int = 8000) -> 
     # Ensure registry is initialized (will use existing if already configured)
     if _registry is None:
         configure()
-    
+
     if transport == "streamable-http":
+        import uvicorn
         from mcp.server.streamable_http import StreamableHTTPServerTransport
         from starlette.applications import Starlette
         from starlette.routing import Route
-        import uvicorn
 
         async def handle_mcp(request):
-            async with StreamableHTTPServerTransport(
+            transport_ctx: Any = StreamableHTTPServerTransport(
                 "/mcp", request.scope, request.receive, request._send
-            ) as transport:
+            )
+            async with transport_ctx as transport:
                 await mcp.run(
                     transport.read_stream,
                     transport.write_stream,
@@ -641,22 +665,20 @@ def run(transport: str = "stdio", host: str = "127.0.0.1", port: int = 8000) -> 
                     logger.info(f"Upfront discovery complete: {len(registry.list_tools())} tools")
                 except Exception as e:
                     logger.warning(f"Upfront discovery failed: {e}")
-            
+
             async with stdio_server() as streams:
-                await mcp.run(
-                    streams[0], streams[1], mcp.create_initialization_options()
-                )
+                await mcp.run(streams[0], streams[1], mcp.create_initialization_options())
 
         anyio.run(arun)
 
 
 if __name__ == "__main__":
     import sys
-    
+
     transport = "stdio"
     host = "127.0.0.1"
     port = 8000
-    
+
     # Simple CLI argument parsing
     args = sys.argv[1:]
     for i, arg in enumerate(args):
@@ -666,5 +688,5 @@ if __name__ == "__main__":
             host = args[i + 1]
         elif arg == "--port" and i + 1 < len(args):
             port = int(args[i + 1])
-    
+
     run(transport=transport, host=host, port=port)

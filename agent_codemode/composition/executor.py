@@ -13,12 +13,12 @@ Identity Context Support:
     into the execution environment. When identities are set in the request
     context (via agent_runtimes.context.identities), they are automatically
     made available as environment variables in the sandbox:
-    
+
     - GITHUB_TOKEN for GitHub OAuth
     - GITLAB_TOKEN for GitLab OAuth
     - GOOGLE_ACCESS_TOKEN for Google OAuth
     - AZURE_ACCESS_TOKEN for Microsoft OAuth
-    
+
     This allows code executed via execute_code to access authenticated
     APIs without explicitly passing credentials.
 """
@@ -26,12 +26,13 @@ Identity Context Support:
 import logging
 import time
 from pathlib import Path
+from types import TracebackType
 from typing import Any, Optional
 
-from code_sandboxes import Sandbox, ExecutionResult, SandboxConfig
+from code_sandboxes import ExecutionResult, Sandbox, SandboxConfig  # type: ignore[import-untyped]
 
-from ..discovery.registry import ToolRegistry
 from ..discovery.codegen import PythonCodeGenerator
+from ..discovery.registry import ToolRegistry
 from ..types import CodeModeConfig, ToolCallResult
 
 logger = logging.getLogger(__name__)
@@ -39,17 +40,22 @@ logger = logging.getLogger(__name__)
 
 def _get_identity_env() -> dict[str, str]:
     """Get identity environment variables from request context.
-    
+
     This function attempts to import the identity context from agent_runtimes.
     If not available (standalone codemode usage), returns empty dict.
-    
+
     Returns:
         Dictionary of environment variable names to token values.
     """
     try:
-        from agent_runtimes.context.identities import get_identity_env
+        import importlib
+
+        get_identity_env = importlib.import_module(
+            "agent_runtimes.context.identities"
+        ).get_identity_env
+
         return get_identity_env()
-    except ImportError:
+    except Exception:
         return {}
 
 
@@ -134,11 +140,16 @@ class CodeModeExecutor:
 
     def _is_local_eval_sandbox(self) -> bool:
         """Check if the sandbox is a eval type (has in-memory namespaces).
-        
+
         This checks the actual sandbox instance, not the config, to handle
         cases where an external sandbox is passed that differs from config.
         """
-        return self._sandbox is not None and hasattr(self._sandbox, '_namespaces')
+        return self._sandbox is not None and hasattr(self._sandbox, "_namespaces")
+
+    def _require_sandbox(self) -> Sandbox:
+        if self._sandbox is None:
+            raise RuntimeError("Sandbox is not initialized")
+        return self._sandbox
 
     @property
     def sandbox(self) -> Optional[Sandbox]:
@@ -152,8 +163,12 @@ class CodeModeExecutor:
         prepares the sandbox environment.
         """
         import sys as _sys
-        print(f"[EXECUTOR.setup] Starting setup, sandbox_variant={self.config.sandbox_variant}", file=_sys.stderr)
-        
+
+        print(
+            f"[EXECUTOR.setup] Starting setup, sandbox_variant={self.config.sandbox_variant}",
+            file=_sys.stderr,
+        )
+
         # Generate code bindings on the host filesystem. Skip when running in
         # sandbox-only mode (no generated modules exposed).
         if self.config.setup_generated_modules:
@@ -163,19 +178,21 @@ class CodeModeExecutor:
         # Create sandbox if not provided
         if self._sandbox is None:
             import os
+
             # Pass the complete environment to the sandbox
             env_vars = dict(os.environ)
 
             sandbox_config = SandboxConfig(
-                timeout=self.config.sandbox_variant == "datalayer-runtime" and 300 or 30,
+                timeout=300 if self.config.sandbox_variant == "datalayer" else 30,
                 working_dir=self.config.workspace_path,
                 env_vars=env_vars,
+                gpu=self.config.sandbox_gpu,
             )
             sandbox_kwargs: dict[str, Any] = {}
             if self.config.sandbox_image:
                 sandbox_kwargs["image"] = self.config.sandbox_image
             self._sandbox = Sandbox.create(
-                variant=self.config.sandbox_variant,  # type: ignore
+                variant=self.config.sandbox_variant,
                 config=sandbox_config,
                 **sandbox_kwargs,
             )
@@ -205,7 +222,7 @@ class CodeModeExecutor:
         # agent on the same host.
         if not self.config.setup_generated_modules:
             generated_parent = str(Path(self.config.generated_path).resolve().parent)
-            purge_code = f'''
+            purge_code = f"""
 import sys
 _generated_parent = {generated_parent!r}
 
@@ -232,7 +249,7 @@ if not any(
     type(f).__name__ == "_BlockGeneratedFinder" for f in sys.meta_path
 ):
     sys.meta_path.insert(0, _BlockGeneratedFinder())
-'''
+"""
             self._sandbox.run_code(purge_code)
             # Register the tool caller so ``call_tool`` still works inside
             # ``execute_code`` if the agent invokes it directly (raw MCP).
@@ -252,7 +269,7 @@ if not any(
             sandbox_generated_path = str(generated_path.parent)
 
         # Add generated path and skills path to sys.path and clear any stale module cache
-        setup_code = f'''
+        setup_code = f"""
 import sys
 generated_path = {sandbox_generated_path!r}
 skills_path = {str(skills_path)!r}
@@ -286,28 +303,35 @@ if generated_path not in sys.path:
 # Add skills path to sys.path (for skills imports)
 if skills_path not in sys.path:
     sys.path.insert(0, str(skills_path))
-'''
+"""
         self._sandbox.run_code(setup_code)
 
         # Register tool caller with the sandbox
         import sys as _sys
-        print(f"[SETUP ENV DEBUG] About to call register_tool_caller, sandbox={self._sandbox} id={id(self._sandbox)}", file=_sys.stderr)
+
+        print(
+            f"[SETUP ENV DEBUG] About to call register_tool_caller, sandbox={self._sandbox} id={id(self._sandbox)}",
+            file=_sys.stderr,
+        )
         self._sandbox.register_tool_caller(self.call_tool)
-        print(f"[SETUP ENV DEBUG] register_tool_caller called", file=_sys.stderr)
-        
+        print("[SETUP ENV DEBUG] register_tool_caller called", file=_sys.stderr)
+
         # Verify __call_tool__ was set
-        verify_code = '''
+        verify_code = """
 import sys
 try:
     print(f"[VERIFY] __call_tool__ = {__call_tool__}", file=sys.stderr)
 except NameError:
     print("[VERIFY] __call_tool__ NOT SET after register_tool_caller!", file=sys.stderr)
-'''
+"""
         self._sandbox.run_code(verify_code)
 
         # For Jupyter/remote sandboxes, set up in-sandbox registry for tool calling
         # Use actual sandbox type detection, not config
-        print(f"[SETUP ENV] is_local_eval={is_local_eval}, config.mcp_proxy_url={self.config.mcp_proxy_url}", file=_sys.stderr)
+        print(
+            f"[SETUP ENV] is_local_eval={is_local_eval}, config.mcp_proxy_url={self.config.mcp_proxy_url}",
+            file=_sys.stderr,
+        )
         if not is_local_eval:
             # =======================================================================
             # Two-Container Codemode Architecture
@@ -337,11 +361,11 @@ except NameError:
             #    - Requires stdio MCP processes accessible from the sandbox (not always possible)
             #
             # =======================================================================
-            
+
             if self.config.mcp_proxy_url:
                 # HTTP Proxy Mode: Use HTTP calls to agent-runtimes proxy endpoint
                 proxy_url = self.config.mcp_proxy_url.rstrip("/")
-                
+
                 in_sandbox_http_caller_setup = f'''
 # =======================================================================
 # HTTP Proxy Tool Caller for Two-Container Codemode
@@ -371,29 +395,29 @@ __MCP_PROXY_URL__ = "{proxy_url}"
 
 async def __call_tool__(tool_name: str, arguments: dict) -> dict:
     """Call a tool via HTTP proxy to agent-runtimes.
-    
+
     This function routes tool calls through the MCP proxy endpoint,
     which forwards them to the appropriate stdio MCP server.
-    
+
     Args:
         tool_name: Full tool name in format "server__toolname" (e.g., "github__star_repo")
         arguments: Tool arguments dictionary
-        
+
     Returns:
         Tool result dictionary
     """
     # Parse server name from tool_name (format: server__toolname)
     if "__" not in tool_name:
         return {{"isError": True, "content": [{{"type": "text", "text": f"Invalid tool name format: {{tool_name}}. Expected server__toolname"}}]}}
-    
+
     server_name, original_tool_name = tool_name.split("__", 1)
-    
+
     # Build the proxy URL
     # Format: /api/v1/mcp/proxy/{{server_name}}/tools/{{tool_name}}
     url = f"{{__MCP_PROXY_URL__}}/{{server_name}}/tools/{{original_tool_name}}"
-    
+
     print(f"[HTTP Proxy] Calling tool: {{tool_name}} -> {{url}}", file=sys.stderr)
-    
+
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
             response = await client.post(
@@ -401,21 +425,21 @@ async def __call_tool__(tool_name: str, arguments: dict) -> dict:
                 json={{"arguments": arguments}},
                 headers={{"Content-Type": "application/json"}},
             )
-            
+
             if response.status_code == 404:
                 return {{
                     "isError": True,
                     "content": [{{"type": "text", "text": f"MCP server '{{server_name}}' not found or tool '{{original_tool_name}}' not available"}}]
                 }}
-            
+
             if response.status_code != 200:
                 return {{
                     "isError": True,
                     "content": [{{"type": "text", "text": f"HTTP {{response.status_code}}: {{response.text}}"}}]
                 }}
-            
+
             result = response.json()
-            
+
             # Convert proxy response to MCP format
             if result.get("success", False):
                 return {{
@@ -427,7 +451,7 @@ async def __call_tool__(tool_name: str, arguments: dict) -> dict:
                     "isError": True,
                     "content": [{{"type": "text", "text": result.get("error", "Unknown error")}}]
                 }}
-                
+
     except httpx.ConnectError as e:
         return {{
             "isError": True,
@@ -455,7 +479,7 @@ print(f"[SETUP] HTTP proxy tool caller configured for {{__MCP_PROXY_URL__}}", fi
                     }
                     for config in self.registry._servers.values()
                 ]
-                
+
                 in_sandbox_registry_setup = f'''
 try:
     from agent_codemode.proxy.mcp_client import MCPClient
@@ -479,7 +503,7 @@ class _SandboxRegistry:
                 env=config["env"],
             )
             self._clients[config["name"]] = client
-    
+
     async def call_tool(self, tool_name, arguments):
         """Call a tool with arguments."""
         # Parse server name from tool_name (format: server__toolname)
@@ -487,18 +511,18 @@ class _SandboxRegistry:
             server_name, original_name = tool_name.split("__", 1)
         else:
             return {{"error": f"Invalid tool name format: {{tool_name}}"}}
-        
+
         client = self._clients.get(server_name)
         if not client:
             return {{"error": f"Server not available: {{server_name}}"}}
-        
+
         return await client.call_tool(original_name, arguments)
 
 class _SandboxExecutor:
     """In-sandbox executor for tool calls."""
     def __init__(self, registry):
         self._registry = registry
-    
+
     async def call_tool(self, tool_name, arguments):
         return await self._registry.call_tool(tool_name, arguments)
 
@@ -511,40 +535,42 @@ async def __call_tool__(tool_name, arguments):
                 self._sandbox.run_code(in_sandbox_registry_setup)
 
         # Set up the generated client to use __call_tool__
-        caller_setup_code = '''
+        caller_setup_code = """
 try:
     from generated.client import set_tool_caller
     set_tool_caller(__call_tool__)
 except (ImportError, NameError) as e:
     import sys
     print(f"[SETUP] caller_setup_code error: {type(e).__name__}: {e}", file=sys.stderr)
-'''
+"""
         self._sandbox.run_code(caller_setup_code)
 
     async def _generate_tools_in_sandbox(self) -> None:
         """Generate tool bindings directly in the remote sandbox.
-        
+
         For Jupyter/remote sandboxes, we can't easily upload files, so instead
         we send the code generation logic to be executed in the sandbox.
         This way the generated modules exist in the sandbox's filesystem.
         """
         if self._sandbox is None:
             return
-            
+
         # Get tool definitions for code generation
         tools_dict = {tool.name: tool for tool in self.registry.list_tools()}
-        
+
         # Build serializable tool data
         tools_data = []
         for name, tool in tools_dict.items():
-            tools_data.append({
-                "name": tool.name,
-                "description": tool.description,
-                "input_schema": tool.input_schema,
-                "output_schema": tool.output_schema,
-                "server_name": tool.server_name,
-            })
-        
+            tools_data.append(
+                {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "input_schema": tool.input_schema,
+                    "output_schema": tool.output_schema,
+                    "server_name": tool.server_name,
+                }
+            )
+
         # Code to generate bindings in the sandbox
         generation_code = f'''
 import os
@@ -611,7 +637,7 @@ async def call_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
     if _tool_caller is None:
         raise RuntimeError("No tool caller configured.")
     result = await _tool_caller(tool_name, arguments)
-    
+
     if not isinstance(result, (dict, object)) or result is None:
         return result
 
@@ -626,38 +652,38 @@ async def call_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
         content_list = result.get("content")
     elif hasattr(result, "content"):
         content_list = result.content
-    
+
     if not isinstance(content_list, list):
         return result
 
     text_content = ""
     has_text = False
-    
+
     for part in content_list:
         part_type = None
         part_text = None
-        
+
         if isinstance(part, dict):
             part_type = part.get("type")
             part_text = part.get("text")
         elif hasattr(part, "type") and hasattr(part, "text"):
             part_type = part.type
             part_text = part.text
-            
+
         if part_type == "text" and part_text is not None:
             text_content += part_text
             has_text = True
-    
+
     if is_error and has_text:
         raise RuntimeError(text_content)
-            
+
     if has_text:
         try:
             import json
             return json.loads(text_content)
         except Exception:
             return text_content
-            
+
     return result
 """
 (__generated_path__ / "client.py").write_text(__client_code__)
@@ -674,22 +700,22 @@ for tool in __tools_data__:
 for server_name, tools_list in __server_tools__.items():
     server_dir = __mcp_path__ / server_name
     server_dir.mkdir(parents=True, exist_ok=True)
-    
+
     imports = []
     exports = []
-    
+
     for tool in tools_list:
         tool_name = tool["name"]
         if tool_name.startswith(f"{{server_name}}__"):
             short_name = tool_name[len(server_name) + 2:]
         else:
             short_name = tool_name
-        
+
         func_name = _sanitize_name(short_name)
         input_type = _schema_to_type_hint(tool.get("input_schema", {{}}))
         output_type = _schema_to_type_hint(tool.get("output_schema")) if tool.get("output_schema") else "Any"
         description = tool.get("description", f"Call {{tool_name}} tool.")
-        
+
         # Generate tool file
         tool_code = f"""# Auto-generated tool binding for {{tool_name}}
 from typing import Any, Optional
@@ -704,10 +730,10 @@ async def {{func_name}}(arguments: Optional[{{input_type}}] = None, **kwargs: An
     return await call_tool("{{tool_name}}", arguments)
 """
         (server_dir / f"{{func_name}}.py").write_text(tool_code)
-        
+
         imports.append(f"from .{{func_name}} import {{func_name}}")
         exports.append(f'    "{{func_name}}",')
-    
+
     # Generate server index
     server_index = f"""# Auto-generated server module for {{server_name}}
 {{chr(10).join(imports)}}
@@ -1005,9 +1031,7 @@ print("Mode: direct execution (no MCP proxy)")
 
         if self._in_execute and self.config.max_tool_calls is not None:
             if self._tool_calls_in_run >= self.config.max_tool_calls:
-                raise RuntimeError(
-                    f"Tool call limit exceeded ({self.config.max_tool_calls})."
-                )
+                raise RuntimeError(f"Tool call limit exceeded ({self.config.max_tool_calls}).")
             self._tool_calls_in_run += 1
 
         try:
@@ -1051,7 +1075,7 @@ print("Mode: direct execution (no MCP proxy)")
 
         The code can import from the generated modules and call tools
         using async/await syntax.
-        
+
         Identity tokens from the request context are automatically injected
         as environment variables (e.g., GITHUB_TOKEN, GITLAB_TOKEN).
 
@@ -1074,7 +1098,7 @@ print("Mode: direct execution (no MCP proxy)")
         try:
             # Get identity environment variables from request context
             identity_env = _get_identity_env()
-            
+
             # Get the generated path for sys.path setup
             # For remote sandboxes, use /tmp so 'from generated.mcp...' works (files at /tmp/generated/)
             # For eval, use parent of generated_path so 'from generated.mcp...' works
@@ -1084,7 +1108,7 @@ print("Mode: direct execution (no MCP proxy)")
                 generated_path = "/tmp"
             else:
                 generated_path = str(Path(self.config.generated_path).resolve().parent)
-            
+
             # Build identity injection code if we have tokens
             identity_injection = ""
             if identity_env:
@@ -1094,9 +1118,9 @@ print("Mode: direct execution (no MCP proxy)")
 import os
 os.environ.update({identity_env!r})
 """
-            
+
             # Set up the environment before running user code
-            setup_code = f'''{identity_injection}
+            setup_code = f"""{identity_injection}
 import sys
 
 # Ensure generated path is first on sys.path and purge stale generated modules
@@ -1128,7 +1152,7 @@ try:
         __generated_spec__.loader.exec_module(__generated_module__)
 except Exception:
     pass
-'''
+"""
             # Branch based on actual sandbox type (already computed above)
             if is_local_eval:
                 # For eval, we can access _namespaces directly
@@ -1138,6 +1162,7 @@ except Exception:
                 return await self._execute_jupyter(code, setup_code, timeout)
         finally:
             self._in_execute = False
+
     async def _execute_local_eval(
         self,
         code: str,
@@ -1145,33 +1170,41 @@ except Exception:
         timeout: Optional[float] = None,
     ) -> ExecutionResult:
         """Execute code in eval sandbox with direct namespace access."""
-        import sys
         import io
         import time
-        from contextlib import redirect_stdout, redirect_stderr
-        from code_sandboxes.models import ExecutionResult, Logs, OutputMessage
-        
+        from contextlib import redirect_stderr, redirect_stdout
+
+        from code_sandboxes.models import (  # type: ignore[import-untyped]
+            ExecutionResult,
+            Logs,
+            OutputMessage,
+        )
+
+        sandbox = self._require_sandbox()
+
         # Get the namespace directly
-        namespace = self._sandbox._namespaces[self._sandbox._default_context.id]
-        
+        namespace = sandbox._namespaces[sandbox._default_context.id]
+
         # Execute setup_code directly in namespace (avoids async wrapper issues)
         exec(setup_code, namespace, namespace)
-        
+
         # Configure the generated.client tool caller if available
-        if '__call_tool__' in namespace:
+        if "__call_tool__" in namespace:
             try:
-                from generated.client import set_tool_caller
-                set_tool_caller(namespace['__call_tool__'])
+                import importlib
+
+                set_tool_caller = importlib.import_module("generated.client").set_tool_caller
+                set_tool_caller(namespace["__call_tool__"])
             except ImportError:
                 pass
-        
+
         # For async code, we need to handle it specially to avoid event loop conflicts
         if "await " in code or "async " in code:
             # Wrap user code in async function
             def _indent_code(value: str, spaces: int) -> str:
                 indent = " " * spaces
                 return "\n".join(indent + line for line in value.split("\n"))
-            
+
             async_wrapper = f"""
 async def __user_code__():
 {_indent_code(code, 4)}
@@ -1179,11 +1212,11 @@ async def __user_code__():
 """
             # Execute the wrapper in namespace
             exec(async_wrapper, namespace, namespace)
-            
+
             # Capture stdout/stderr
             stdout_buffer = io.StringIO()
             stderr_buffer = io.StringIO()
-            
+
             exit_code = None
 
             # Call the async function directly (we're already in async context)
@@ -1199,31 +1232,45 @@ async def __user_code__():
                     else:
                         exit_code = 0
                     locals_value = {}
-            
+
             # Update namespace with returned locals
             if isinstance(locals_value, dict):
                 for key, value in locals_value.items():
-                    if key in ("__builtins__", "__name__", "__doc__", "__package__", 
-                             "__loader__", "__spec__", "__annotations__", "__cached__",
-                             "__file__"):
+                    if key in (
+                        "__builtins__",
+                        "__name__",
+                        "__doc__",
+                        "__package__",
+                        "__loader__",
+                        "__spec__",
+                        "__annotations__",
+                        "__cached__",
+                        "__file__",
+                    ):
                         continue
                     namespace[key] = value
-            
+
             stdout_lines = stdout_buffer.getvalue().splitlines()
             stderr_lines = stderr_buffer.getvalue().splitlines()
             timestamp = time.time()
-            
+
             result = ExecutionResult(
                 execution_ok=True,
                 code_error=None,
                 exit_code=exit_code,
                 results=[],
                 logs=Logs(
-                    stdout=[OutputMessage(line=line, timestamp=timestamp, error=False) for line in stdout_lines],
-                    stderr=[OutputMessage(line=line, timestamp=timestamp, error=True) for line in stderr_lines],
+                    stdout=[
+                        OutputMessage(line=line, timestamp=timestamp, error=False)
+                        for line in stdout_lines
+                    ],
+                    stderr=[
+                        OutputMessage(line=line, timestamp=timestamp, error=True)
+                        for line in stderr_lines
+                    ],
                 ),
-                execution_count=self._sandbox._execution_count[self._sandbox._default_context.id],
-                context_id=self._sandbox._default_context.id,
+                execution_count=sandbox._execution_count[sandbox._default_context.id],
+                context_id=sandbox._default_context.id,
             )
         else:
             # For sync code, run in a worker thread so FastAPI's event loop
@@ -1231,11 +1278,11 @@ async def __user_code__():
             import asyncio
 
             result = await asyncio.to_thread(
-                self._sandbox.run_code,
+                sandbox.run_code,
                 code,
                 timeout=timeout,
             )
-        
+
         return result
 
     async def _execute_jupyter(
@@ -1245,13 +1292,13 @@ async def __user_code__():
         timeout: Optional[float] = None,
     ) -> ExecutionResult:
         """Execute code in Jupyter/remote sandbox using run_code().
-        
+
         IMPORTANT: The sandbox.run_code() is synchronous and blocks waiting
         for the kernel to complete. When the kernel code calls back to the
         agent-runtimes server (e.g., via MCP proxy for tool calls), we need
         the event loop to be free to handle those requests. Therefore, we run
         the blocking code in a thread pool using asyncio.to_thread().
-        
+
         This prevents the deadlock:
         1. FastAPI endpoint -> Jupyter sandbox (waiting)
         2. Jupyter sandbox -> MCP proxy HTTP request
@@ -1259,27 +1306,84 @@ async def __user_code__():
         4. With to_thread: MCP proxy handles request, kernel continues
         """
         import asyncio
-        
+
+        sandbox = self._require_sandbox()
+
         # Run setup code in thread pool to avoid blocking event loop
-        await asyncio.to_thread(self._sandbox.run_code, setup_code, timeout=timeout)
-        
+        await asyncio.to_thread(sandbox.run_code, setup_code, timeout=timeout)
+
         # Re-register the tool caller since the module cache was cleared
         # The __call_tool__ function was defined during initial setup and persists
         # in the kernel's global namespace, but we need to re-wire it to the
         # freshly-loaded generated.client module
-        tool_caller_rewire = '''
+        tool_caller_rewire = """
 try:
     from generated.client import set_tool_caller
     set_tool_caller(__call_tool__)
 except (ImportError, NameError) as e:
     import sys
     print(f"[EXECUTE] Failed to rewire tool caller: {type(e).__name__}: {e}", file=sys.stderr)
-'''
-        await asyncio.to_thread(self._sandbox.run_code, tool_caller_rewire, timeout=timeout)
-        
+"""
+        await asyncio.to_thread(sandbox.run_code, tool_caller_rewire, timeout=timeout)
+
+        if hasattr(sandbox, "run_code_streaming"):
+            from code_sandboxes.models import (
+                CodeError,
+                Logs,
+                OutputMessage,
+                Result,
+            )
+
+            def _collect_streaming_result() -> ExecutionResult:
+                stdout: list[OutputMessage] = []
+                stderr: list[OutputMessage] = []
+                results: list[Result] = []
+                code_error: CodeError | None = None
+
+                try:
+                    for event in sandbox.run_code_streaming(code, timeout=timeout):
+                        if hasattr(event, "line"):
+                            message = OutputMessage(
+                                line=str(getattr(event, "line", "") or ""),
+                                timestamp=float(getattr(event, "timestamp", 0.0) or 0.0),
+                                error=bool(getattr(event, "error", False)),
+                            )
+                            if message.error:
+                                stderr.append(message)
+                            else:
+                                stdout.append(message)
+                        elif hasattr(event, "data"):
+                            results.append(
+                                Result(
+                                    data=getattr(event, "data", {}) or {},
+                                    is_main_result=bool(getattr(event, "is_main_result", False)),
+                                    extra=getattr(event, "extra", {}) or {},
+                                )
+                            )
+                        elif hasattr(event, "name") and hasattr(event, "value"):
+                            code_error = CodeError(
+                                name=str(getattr(event, "name", "Error") or "Error"),
+                                value=str(getattr(event, "value", "") or ""),
+                                traceback=str(getattr(event, "traceback", "") or ""),
+                            )
+
+                    return ExecutionResult(
+                        logs=Logs(stdout=stdout, stderr=stderr),
+                        results=results,
+                        code_error=code_error,
+                        execution_ok=True,
+                    )
+                except Exception as exc:
+                    return ExecutionResult(
+                        execution_ok=False,
+                        execution_error=str(exc),
+                    )
+
+            return await asyncio.to_thread(_collect_streaming_result)
+
         # Run user code in thread pool - this is where tool calls happen
         # and the kernel may call back to the MCP proxy
-        return await asyncio.to_thread(self._sandbox.run_code, code, timeout=timeout)
+        return await asyncio.to_thread(sandbox.run_code, code, timeout=timeout)
 
     def _indent_code(self, code: str, spaces: int) -> str:
         """Indent code by a number of spaces.
@@ -1309,7 +1413,7 @@ except (ImportError, NameError) as e:
         Returns:
             Execution result.
         """
-        from agent_skills import SkillsManager
+        from agent_skills import SkillsManager  # type: ignore[import-untyped]
 
         manager = SkillsManager(self.config.skills_path)
         skill = manager.get(skill_name)
@@ -1345,7 +1449,12 @@ except (ImportError, NameError) as e:
         await self.setup()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         """Async context manager exit."""
         await self.cleanup()
 

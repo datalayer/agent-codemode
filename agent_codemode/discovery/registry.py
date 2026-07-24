@@ -11,8 +11,8 @@ across multiple MCP servers.
 import logging
 from typing import Optional
 
-from ..types import MCPServerConfig, SearchResult, ServerInfo, ToolDefinition
 from ..proxy.mcp_client import MCPClient
+from ..types import MCPServerConfig, SearchResult, ServerInfo, ToolDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -317,9 +317,7 @@ class ToolRegistry:
             query=query,
         )
 
-    async def call_tool(
-        self, tool_name: str, arguments: dict
-    ) -> dict:
+    async def call_tool(self, tool_name: str, arguments: dict) -> dict:
         """Call a tool with arguments.
 
         Args:

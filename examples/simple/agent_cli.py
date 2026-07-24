@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """Pydantic AI Agent CLI with Agent Codemode (STDIO).
 
 This agent connects to a local MCP stdio server and provides an
@@ -10,16 +9,17 @@ agent-codemode toolset for code-first tool composition.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import io
-import sys
 import logging
+import sys
 from pathlib import Path
 from typing import Optional
-import inspect
 
 try:
     from pydantic_ai import Agent
     from pydantic_ai.mcp import MCPServerStdio
+
     HAS_PYDANTIC_AI = True
 except ImportError:
     HAS_PYDANTIC_AI = False
@@ -27,6 +27,7 @@ except ImportError:
 try:
     from rich.console import Console
     from rich.table import Table
+
     HAS_RICH = True
 except ImportError:
     HAS_RICH = False
@@ -34,6 +35,7 @@ except ImportError:
 try:
     from agent_skills import AgentSkillsToolset, SandboxExecutor
     from code_sandboxes.eval_sandbox import EvalSandbox
+
     HAS_AGENT_SKILLS = True
 except ImportError:
     HAS_AGENT_SKILLS = False
@@ -57,9 +59,7 @@ def _build_prompt_examples(codemode: bool) -> str:
             "without returning the full content each time."
         )
     else:
-        base.append(
-            "(Standard) Use the MCP tools directly for each step."
-        )
+        base.append("(Standard) Use the MCP tools directly for each step.")
     return "\n".join(f"  - {item}" for item in base)
 
 
@@ -176,21 +176,28 @@ def _format_usage(usage: object, keys: Optional[list[str]] = None) -> str:
         return "N/A"
 
     parts = []
-    preferred = [k for k in (keys or [
-        "input_tokens",
-        "output_tokens",
-        "total_tokens",
-        "requests",
-        "cached_tokens",
-        "billable_tokens",
-        "cache_write_tokens",
-        "cache_read_tokens",
-        "input_audio_tokens",
-        "cache_audio_read_tokens",
-        "output_audio_tokens",
-        "tool_calls",
-        "details",
-    ]) if k != "details"]
+    preferred = [
+        k
+        for k in (
+            keys
+            or [
+                "input_tokens",
+                "output_tokens",
+                "total_tokens",
+                "requests",
+                "cached_tokens",
+                "billable_tokens",
+                "cache_write_tokens",
+                "cache_read_tokens",
+                "input_audio_tokens",
+                "cache_audio_read_tokens",
+                "output_audio_tokens",
+                "tool_calls",
+                "details",
+            ]
+        )
+        if k != "details"
+    ]
     for key in preferred:
         if key in data:
             parts.append(f"{key}={data[key]}")
@@ -205,7 +212,7 @@ def _usage_to_table(
     prompt_usage: object,
     session_usage: object,
     keys: Optional[list[str]] = None,
-) -> "Table":
+) -> Table:
     prompt_data = _usage_to_dict(prompt_usage)
     session_data = _usage_to_dict(session_usage)
     table = Table(title="Token usage")
@@ -244,7 +251,6 @@ def _usage_to_table(
                 _format_value(prompt_data.get(key, "-")),
                 _format_value(session_data.get(key, "-")),
             )
-
 
     if table.row_count == 0:
         table.add_row("usage", str(prompt_data or "-"), str(session_data or "-"))
@@ -323,7 +329,7 @@ def create_agent(model: str, codemode: bool) -> tuple[Agent, object | None, obje
     mcp_server_path = _resolve_mcp_server_path()
 
     if codemode:
-        from agent_codemode import CodemodeToolset, ToolRegistry, MCPServerConfig, CodeModeConfig
+        from agent_codemode import CodeModeConfig, CodemodeToolset, MCPServerConfig, ToolRegistry
 
         registry = ToolRegistry()
         # Server name becomes the tool prefix (e.g., example_mcp__read_text_file)
@@ -366,7 +372,9 @@ def create_agent(model: str, codemode: bool) -> tuple[Agent, object | None, obje
                 executor=SandboxExecutor(shared_sandbox),
             )
             toolsets.append(skills_toolset)
-            logger.info("Added AgentSkillsToolset with skills from %s", (repo_root / "skills").resolve())
+            logger.info(
+                "Added AgentSkillsToolset with skills from %s", (repo_root / "skills").resolve()
+            )
         else:
             logger.debug("agent_skills not available, skipping AgentSkillsToolset")
     else:
@@ -410,22 +418,19 @@ def main() -> None:
 
     # Suppress verbose MCP server logs
     logging.getLogger("mcp.server").setLevel(logging.WARNING)
-    
+
     import argparse
+
     parser = argparse.ArgumentParser(description="MCP Agent CLI with Agent Codemode")
     parser.add_argument(
         "--model",
         type=str,
         default="anthropic:claude-sonnet-4-0",
-        help="Model to use (default: anthropic:claude-sonnet-4-0)"
+        help="Model to use (default: anthropic:claude-sonnet-4-0)",
     )
-    parser.add_argument(
-        "--codemode",
-        action="store_true",
-        help="Enable Agent Codemode mode"
-    )
+    parser.add_argument("--codemode", action="store_true", help="Enable Agent Codemode mode")
     args = parser.parse_args()
-    
+
     model = args.model
     codemode = args.codemode
 
@@ -522,15 +527,15 @@ def main() -> None:
                         node_type = type(node).__name__
                         # Print all node types for debugging
                         logger.debug("  [iter %s] %s", iteration_count, node_type)
-                        
-                        if node_type == 'CallToolsNode':
-                            mr = getattr(node, 'model_response', None)
-                            if mr and hasattr(mr, 'parts'):
+
+                        if node_type == "CallToolsNode":
+                            mr = getattr(node, "model_response", None)
+                            if mr and hasattr(mr, "parts"):
                                 for p in mr.parts:
-                                    if hasattr(p, 'tool_name'):
-                                        args = getattr(p, 'args', {})
-                                        if isinstance(args, dict) and 'code' in args:
-                                            code_preview = args['code'][:100].replace('\n', '\\n')
+                                    if hasattr(p, "tool_name"):
+                                        args = getattr(p, "args", {})
+                                        if isinstance(args, dict) and "code" in args:
+                                            code_preview = args["code"][:100].replace("\n", "\\n")
                                             logger.debug(
                                                 "    -> %s(code=%s...)",
                                                 p.tool_name,
@@ -538,9 +543,9 @@ def main() -> None:
                                             )
                                         else:
                                             logger.debug("    -> %s(%s)", p.tool_name, args)
-                        elif node_type == 'HandleResponseNode':
+                        elif node_type == "HandleResponseNode":
                             # Tool results might be here
-                            data = getattr(node, 'data', None)
+                            data = getattr(node, "data", None)
                             if data:
                                 logger.debug("    -> data: %s", str(data)[:200])
                     run_result = run.result
@@ -576,15 +581,22 @@ def main() -> None:
                         counts = codemode_toolset.get_call_counts()  # type: ignore[assignment]
                     if counts:
                         prompt_usage_payload["codemode_tool_calls"] = (
-                            counts.get("codemode_tool_calls", 0) - previous_counts["codemode_tool_calls"]
+                            counts.get("codemode_tool_calls", 0)
+                            - previous_counts["codemode_tool_calls"]
                         )
                         prompt_usage_payload["mcp_tool_calls"] = (
                             counts.get("mcp_tool_calls", 0) - previous_counts["mcp_tool_calls"]
                         )
-                        previous_counts["codemode_tool_calls"] = counts.get("codemode_tool_calls", 0)
+                        previous_counts["codemode_tool_calls"] = counts.get(
+                            "codemode_tool_calls", 0
+                        )
                         previous_counts["mcp_tool_calls"] = counts.get("mcp_tool_calls", 0)
-                        session_usage["codemode_tool_calls"] += float(prompt_usage_payload["codemode_tool_calls"])
-                        session_usage["mcp_tool_calls"] += float(prompt_usage_payload["mcp_tool_calls"])
+                        session_usage["codemode_tool_calls"] += float(
+                            prompt_usage_payload["codemode_tool_calls"]
+                        )
+                        session_usage["mcp_tool_calls"] += float(
+                            prompt_usage_payload["mcp_tool_calls"]
+                        )
 
                 # Track skills tool calls separately
                 if codemode and skills_toolset is not None:
@@ -603,14 +615,19 @@ def main() -> None:
                     prompt_usage_payload["skills_calls"] = "N/A"
 
                 if not codemode:
-                    if "tool_calls" in prompt_usage_payload and "mcp_tool_calls" not in prompt_usage_payload:
+                    if (
+                        "tool_calls" in prompt_usage_payload
+                        and "mcp_tool_calls" not in prompt_usage_payload
+                    ):
                         prompt_usage_payload["mcp_tool_calls"] = prompt_usage_payload["tool_calls"]
                     if "tool_calls" in prompt_usage_payload:
                         prompt_usage_payload.pop("tool_calls", None)
                     prompt_usage_payload.setdefault("mcp_tool_calls", 0)
                     prompt_usage_payload["codemode_tool_calls"] = "N/A"
                     prompt_usage_payload["skills_calls"] = "N/A"
-                    if "tool_calls" in usage_data and isinstance(usage_data["tool_calls"], (int, float)):
+                    if "tool_calls" in usage_data and isinstance(
+                        usage_data["tool_calls"], (int, float)
+                    ):
                         session_usage["mcp_tool_calls"] += float(usage_data["tool_calls"])
                     elif "tool_calls" in usage_data:
                         try:
@@ -650,7 +667,9 @@ def main() -> None:
                     elif skills_toolset is None:
                         session_usage_payload["skills_calls"] = "N/A"
                     console.print(
-                        _usage_to_table(prompt_usage_payload, session_usage_payload, prompt_usage_keys)
+                        _usage_to_table(
+                            prompt_usage_payload, session_usage_payload, prompt_usage_keys
+                        )
                     )
                     console.print()
                 else:

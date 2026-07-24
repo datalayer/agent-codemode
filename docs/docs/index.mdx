@@ -200,7 +200,7 @@ Use reusable code patterns that compose multiple tools:
 # skills/batch_process.py
 async def batch_process(input_dir: str, output_dir: str) -> dict:
     from generated.mcp.filesystem import list_directory, read_file, write_file
-    
+
     entries = await list_directory({"path": input_dir})
     for entry in entries["entries"]:
         content = await read_file({"path": f"{input_dir}/{entry}"})
@@ -286,7 +286,7 @@ await executor.setup()
 
 result = await executor.execute("""
     from generated.mcp.filesystem import read_file, write_file
-    
+
     content = await read_file({"path": "/tmp/input.txt"})
     await write_file({"path": "/tmp/output.txt", "content": content.upper()})
 """)

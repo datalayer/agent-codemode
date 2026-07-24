@@ -48,8 +48,7 @@ from agent_codemode import CodemodeToolset, CodeModeConfig
 config = CodeModeConfig(
     workspace_path="/workspace",
     generated_path="/tmp/generated",
-    sandbox_variant="local",
-    default_timeout=60.0,
+    sandbox_variant="eval",
 )
 
 toolset = CodemodeToolset(
@@ -82,7 +81,7 @@ Execute Python code that uses MCP tools:
 # Agent writes and executes code
 result = execute_code(code="""
     from generated.mcp.filesystem import read_file, list_directory
-    
+
     entries = await list_directory({"path": "/workspace"})
     for entry in entries["entries"]:
         if entry.endswith(".py"):
@@ -106,7 +105,7 @@ from agent_codemode import CodemodeToolset
 
 agent = Agent(
     "anthropic:claude-sonnet-4-20250514",
-    system_prompt="""You are a code-first assistant. 
+    system_prompt="""You are a code-first assistant.
 
 When given a task:
 1. Use search_tools to find relevant MCP tools
@@ -262,7 +261,7 @@ Use Code Mode for complex, multi-step operations:
 # Good for Code Mode: Complex multi-tool workflow
 "Read all Python files, analyze their imports, generate dependency graph"
 
-# Use direct tools: Simple single operations  
+# Use direct tools: Simple single operations
 "Read the file /config.json"
 ```
 
@@ -277,7 +276,7 @@ agent = Agent(
     You have two modes:
     - Code Mode: For complex operations involving multiple files or steps
     - Direct Tools: For simple single operations
-    
+
     Use search_tools first to understand available capabilities.
     When writing code, always include error handling.
     """
@@ -310,8 +309,10 @@ Configure sandbox security:
 from agent_codemode import CodeModeConfig
 
 config = CodeModeConfig(
-    sandbox_variant="datalayer-runtime",  # Isolated cloud sandbox
-    default_timeout=30.0,                  # Limit execution time
+    sandbox_variant="datalayer",  # Isolated cloud sandbox
     workspace_path="/safe/workspace",      # Restricted workspace
 )
+
+# Set timeout per execution call
+result = await executor.execute(code, timeout=30.0)
 ```
