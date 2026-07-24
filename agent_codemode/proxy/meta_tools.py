@@ -19,8 +19,9 @@ directly without LLM inference overhead.
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable
 from inspect import isawaitable
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 if TYPE_CHECKING:
     from ..composition.executor import CodeModeExecutor

@@ -48,7 +48,11 @@ def _get_identity_env() -> dict[str, str]:
         Dictionary of environment variable names to token values.
     """
     try:
-        from agent_runtimes.context.identities import get_identity_env  # type: ignore[import-untyped]
+        import importlib
+
+        get_identity_env = importlib.import_module(
+            "agent_runtimes.context.identities"
+        ).get_identity_env
 
         return get_identity_env()
     except Exception:
@@ -1187,8 +1191,9 @@ except Exception:
         # Configure the generated.client tool caller if available
         if "__call_tool__" in namespace:
             try:
-                from generated.client import set_tool_caller  # type: ignore[import-untyped]
+                import importlib
 
+                set_tool_caller = importlib.import_module("generated.client").set_tool_caller
                 set_tool_caller(namespace["__call_tool__"])
             except ImportError:
                 pass
