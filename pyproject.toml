@@ -111,4 +111,6 @@ ignore = [
 # S101 Use of `assert` detected
 "tests/*" = ["S101"]
 "tests/test_stdout_capture.py" = ["S101", "T201", "E501"]
+"tests/test_direct_execution.py" = ["T201"]
+"tests/test_executor_async.py" = ["T201"]
 "tests/test_skill_bindings.py" = ["S102", "F841"]
