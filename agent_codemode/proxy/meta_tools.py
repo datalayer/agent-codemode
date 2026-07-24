@@ -19,7 +19,8 @@ directly without LLM inference overhead.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from inspect import isawaitable
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional
 
 if TYPE_CHECKING:
     from ..composition.executor import CodeModeExecutor
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 # Type for AI tool selector function
-AIToolSelector = Callable[[str, list[dict[str, Any]]], list[str]]
+AIToolSelector = Callable[[str, list[dict[str, Any]]], list[str] | Awaitable[list[str]]]
 
 
 class MetaToolProvider:
@@ -112,7 +113,8 @@ class MetaToolProvider:
         if self._ai_selector and query:
             tool_list = [{"name": t.name, "description": t.description} for t in all_tools]
             try:
-                selected_names = await self._ai_selector(query, tool_list)
+                selected = self._ai_selector(query, tool_list)
+                selected_names = await selected if isawaitable(selected) else selected
                 all_tools = [t for t in all_tools if t.name in selected_names]
             except Exception as e:
                 logger.debug(

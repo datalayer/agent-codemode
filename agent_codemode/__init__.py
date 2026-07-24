@@ -29,7 +29,7 @@ Example:
 """
 
 # Import skills functionality from agent_skills
-from agent_skills import (
+from agent_skills import (  # type: ignore[import-untyped]
     RateLimiter,
     Skill,
     SkillDirectory,

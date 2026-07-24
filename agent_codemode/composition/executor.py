@@ -26,9 +26,10 @@ Identity Context Support:
 import logging
 import time
 from pathlib import Path
+from types import TracebackType
 from typing import Any, Optional
 
-from code_sandboxes import ExecutionResult, Sandbox, SandboxConfig
+from code_sandboxes import ExecutionResult, Sandbox, SandboxConfig  # type: ignore[import-untyped]
 
 from ..discovery.codegen import PythonCodeGenerator
 from ..discovery.registry import ToolRegistry
@@ -47,7 +48,7 @@ def _get_identity_env() -> dict[str, str]:
         Dictionary of environment variable names to token values.
     """
     try:
-        from agent_runtimes.context.identities import get_identity_env
+        from agent_runtimes.context.identities import get_identity_env  # type: ignore[import-untyped]
 
         return get_identity_env()
     except Exception:
@@ -141,6 +142,11 @@ class CodeModeExecutor:
         """
         return self._sandbox is not None and hasattr(self._sandbox, "_namespaces")
 
+    def _require_sandbox(self) -> Sandbox:
+        if self._sandbox is None:
+            raise RuntimeError("Sandbox is not initialized")
+        return self._sandbox
+
     @property
     def sandbox(self) -> Optional[Sandbox]:
         """Get the sandbox instance."""
@@ -182,7 +188,7 @@ class CodeModeExecutor:
             if self.config.sandbox_image:
                 sandbox_kwargs["image"] = self.config.sandbox_image
             self._sandbox = Sandbox.create(
-                variant=self.config.sandbox_variant,  # type: ignore
+                variant=self.config.sandbox_variant,
                 config=sandbox_config,
                 **sandbox_kwargs,
             )
@@ -1164,10 +1170,16 @@ except Exception:
         import time
         from contextlib import redirect_stderr, redirect_stdout
 
-        from code_sandboxes.models import ExecutionResult, Logs, OutputMessage
+        from code_sandboxes.models import (  # type: ignore[import-untyped]
+            ExecutionResult,
+            Logs,
+            OutputMessage,
+        )
+
+        sandbox = self._require_sandbox()
 
         # Get the namespace directly
-        namespace = self._sandbox._namespaces[self._sandbox._default_context.id]
+        namespace = sandbox._namespaces[sandbox._default_context.id]
 
         # Execute setup_code directly in namespace (avoids async wrapper issues)
         exec(setup_code, namespace, namespace)
@@ -1175,7 +1187,7 @@ except Exception:
         # Configure the generated.client tool caller if available
         if "__call_tool__" in namespace:
             try:
-                from generated.client import set_tool_caller
+                from generated.client import set_tool_caller  # type: ignore[import-untyped]
 
                 set_tool_caller(namespace["__call_tool__"])
             except ImportError:
@@ -1252,8 +1264,8 @@ async def __user_code__():
                         for line in stderr_lines
                     ],
                 ),
-                execution_count=self._sandbox._execution_count[self._sandbox._default_context.id],
-                context_id=self._sandbox._default_context.id,
+                execution_count=sandbox._execution_count[sandbox._default_context.id],
+                context_id=sandbox._default_context.id,
             )
         else:
             # For sync code, run in a worker thread so FastAPI's event loop
@@ -1261,7 +1273,7 @@ async def __user_code__():
             import asyncio
 
             result = await asyncio.to_thread(
-                self._sandbox.run_code,
+                sandbox.run_code,
                 code,
                 timeout=timeout,
             )
@@ -1290,8 +1302,10 @@ async def __user_code__():
         """
         import asyncio
 
+        sandbox = self._require_sandbox()
+
         # Run setup code in thread pool to avoid blocking event loop
-        await asyncio.to_thread(self._sandbox.run_code, setup_code, timeout=timeout)
+        await asyncio.to_thread(sandbox.run_code, setup_code, timeout=timeout)
 
         # Re-register the tool caller since the module cache was cleared
         # The __call_tool__ function was defined during initial setup and persists
@@ -1305,10 +1319,15 @@ except (ImportError, NameError) as e:
     import sys
     print(f"[EXECUTE] Failed to rewire tool caller: {type(e).__name__}: {e}", file=sys.stderr)
 """
-        await asyncio.to_thread(self._sandbox.run_code, tool_caller_rewire, timeout=timeout)
+        await asyncio.to_thread(sandbox.run_code, tool_caller_rewire, timeout=timeout)
 
-        if hasattr(self._sandbox, "run_code_streaming"):
-            from code_sandboxes.models import CodeError, Logs, OutputMessage, Result
+        if hasattr(sandbox, "run_code_streaming"):
+            from code_sandboxes.models import (
+                CodeError,
+                Logs,
+                OutputMessage,
+                Result,
+            )
 
             def _collect_streaming_result() -> ExecutionResult:
                 stdout: list[OutputMessage] = []
@@ -1317,7 +1336,7 @@ except (ImportError, NameError) as e:
                 code_error: CodeError | None = None
 
                 try:
-                    for event in self._sandbox.run_code_streaming(code, timeout=timeout):
+                    for event in sandbox.run_code_streaming(code, timeout=timeout):
                         if hasattr(event, "line"):
                             message = OutputMessage(
                                 line=str(getattr(event, "line", "") or ""),
@@ -1359,7 +1378,7 @@ except (ImportError, NameError) as e:
 
         # Run user code in thread pool - this is where tool calls happen
         # and the kernel may call back to the MCP proxy
-        return await asyncio.to_thread(self._sandbox.run_code, code, timeout=timeout)
+        return await asyncio.to_thread(sandbox.run_code, code, timeout=timeout)
 
     def _indent_code(self, code: str, spaces: int) -> str:
         """Indent code by a number of spaces.
@@ -1389,7 +1408,7 @@ except (ImportError, NameError) as e:
         Returns:
             Execution result.
         """
-        from agent_skills import SkillsManager
+        from agent_skills import SkillsManager  # type: ignore[import-untyped]
 
         manager = SkillsManager(self.config.skills_path)
         skill = manager.get(skill_name)
@@ -1425,7 +1444,12 @@ except (ImportError, NameError) as e:
         await self.setup()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         """Async context manager exit."""
         await self.cleanup()
 

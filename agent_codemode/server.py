@@ -21,7 +21,7 @@ Based on:
 
 import json
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import anyio
 import mcp.types as types
@@ -77,6 +77,8 @@ def get_registry() -> ToolRegistry:
         configure()
     else:
         logger.debug(f"Returning existing registry with {len(_registry._servers)} servers")
+    if _registry is None:
+        raise RuntimeError("Tool registry is not configured")
     return _registry
 
 
@@ -85,6 +87,8 @@ def get_executor() -> CodeModeExecutor:
     global _executor
     if _executor is None:
         configure()
+    if _executor is None:
+        raise RuntimeError("Code executor is not configured")
     return _executor
 
 
@@ -109,11 +113,13 @@ def _build_tools() -> list[types.Tool]:
         "call_tool",
     ]:
         schema = TOOL_SCHEMAS[name]
+        description = cast(str | None, schema.get("description"))
+        parameters = cast(dict[str, Any], schema.get("parameters", {}))
         tools.append(
             types.Tool(
                 name=name,
-                description=schema["description"],
-                inputSchema=schema["parameters"],
+                description=description,
+                inputSchema=parameters,
             )
         )
 
@@ -378,7 +384,7 @@ async def handle_call_tool(arguments: dict[str, Any]) -> dict[str, Any]:
 
 async def handle_save_skill(arguments: dict[str, Any]) -> dict[str, Any]:
     """Save a reusable skill (code-based tool composition)."""
-    from agent_skills import SkillsManager
+    from agent_skills import SkillsManager  # type: ignore[import-untyped]
 
     name = arguments["name"]
     code = arguments["code"]
@@ -511,7 +517,7 @@ async def handle_get_execution_history(arguments: dict[str, Any]) -> dict[str, A
 
 async def handle_add_mcp_server(arguments: dict[str, Any]) -> dict[str, Any]:
     """Add a new MCP server to discover tools from."""
-    from .models import MCPServerConfig
+    from .models import MCPServerConfig  # type: ignore[import-untyped]
 
     name = arguments["name"]
     url = arguments.get("url")
@@ -628,9 +634,10 @@ def run(transport: str = "stdio", host: str = "127.0.0.1", port: int = 8000) -> 
         from starlette.routing import Route
 
         async def handle_mcp(request):
-            async with StreamableHTTPServerTransport(
+            transport_ctx: Any = StreamableHTTPServerTransport(
                 "/mcp", request.scope, request.receive, request._send
-            ) as transport:
+            )
+            async with transport_ctx as transport:
                 await mcp.run(
                     transport.read_stream,
                     transport.write_stream,

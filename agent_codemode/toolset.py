@@ -62,7 +62,6 @@ try:
     PYDANTIC_AI_AVAILABLE = True
 except ImportError:
     PYDANTIC_AI_AVAILABLE = False
-    AbstractToolset = object
 
 
 if PYDANTIC_AI_AVAILABLE:
@@ -118,6 +117,11 @@ if PYDANTIC_AI_AVAILABLE:
             default_factory=list,
             repr=False,
         )
+
+        def _get_registry(self) -> ToolRegistry:
+            if self.registry is None:
+                raise RuntimeError("Tool registry is not initialized")
+            return self.registry
 
         @property
         def runtime_is_executing(self) -> bool:
@@ -177,13 +181,14 @@ if PYDANTIC_AI_AVAILABLE:
                 from .composition.executor import CodeModeExecutor
 
                 # Ensure tools are discovered before generating bindings
-                if self.registry is not None and not self.registry.list_tools():
+                registry = self._get_registry()
+                if not registry.list_tools():
                     logger.info("Codemode registry empty; discovering tools...")
-                    await self.registry.discover_all()
-                tool_count = len(self.registry.list_tools()) if self.registry is not None else 0
+                    await registry.discover_all()
+                tool_count = len(registry.list_tools())
                 logger.info("Codemode registry tool count: %s", tool_count)
                 self._executor = CodeModeExecutor(
-                    registry=self.registry,
+                    registry=registry,
                     config=self.config,
                     sandbox=self.sandbox,
                 )
@@ -320,7 +325,8 @@ if PYDANTIC_AI_AVAILABLE:
             include_deferred: bool = False,
         ) -> dict[str, Any]:
             """List all tool names quickly without descriptions."""
-            tools = self.registry.list_tools(server=server, include_deferred=include_deferred)
+            registry = self._get_registry()
+            tools = registry.list_tools(server=server, include_deferred=include_deferred)
             total_available = len(tools)
             if keywords:
                 lowered = [kw.lower() for kw in keywords]
@@ -378,7 +384,8 @@ if PYDANTIC_AI_AVAILABLE:
             include_deferred: bool = True,
         ) -> dict[str, Any]:
             """Search for tools matching a query."""
-            result = await self.registry.search_tools(
+            registry = self._get_registry()
+            result = await registry.search_tools(
                 query, server=server, limit=limit, include_deferred=include_deferred
             )
             tools = result.tools
@@ -393,7 +400,7 @@ if PYDANTIC_AI_AVAILABLE:
                     if isawaitable(reranked):
                         tools = await reranked
                     else:
-                        tools = reranked  # type: ignore[assignment]
+                        tools = reranked
                     after = [t.name for t in tools]
                     logger.debug(
                         "Applied tool reranker: before=%s, after=%s",
@@ -425,7 +432,8 @@ if PYDANTIC_AI_AVAILABLE:
 
         async def _get_tool_details(self, tool_name: str) -> dict[str, Any]:
             """Get detailed information about a tool."""
-            tool = self.registry.get_tool(tool_name)
+            registry = self._get_registry()
+            tool = registry.get_tool(tool_name)
 
             if tool is None:
                 return {"error": f"Tool not found: {tool_name}"}
@@ -442,11 +450,12 @@ if PYDANTIC_AI_AVAILABLE:
 
         async def _list_servers(self) -> dict[str, Any]:
             """List all connected MCP servers with import paths."""
-            servers = await self.registry.list_servers()
+            registry = self._get_registry()
+            servers = await registry.list_servers()
 
             # Get tools for each server to provide function names
             server_tools: dict[str, list[str]] = {}
-            for tool in self.registry.list_tools(include_deferred=True):
+            for tool in registry.list_tools(include_deferred=True):
                 sname = tool.server_name or "unknown"
                 if sname not in server_tools:
                     server_tools[sname] = []
@@ -586,7 +595,8 @@ if PYDANTIC_AI_AVAILABLE:
         ) -> dict[str, Any]:
             """Call a single tool directly."""
             try:
-                result = await self.registry.call_tool(tool_name, arguments)
+                registry = self._get_registry()
+                result = await registry.call_tool(tool_name, arguments)
                 return {
                     "success": True,
                     "result": result,

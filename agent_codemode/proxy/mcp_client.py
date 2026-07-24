@@ -49,10 +49,10 @@ class MCPClient:
         self._http_client: Optional[httpx.AsyncClient] = None
         self._stdio_process: Optional[asyncio.subprocess.Process] = None
         self._request_id = 0
-        self._stdio_session = None
-        self._stdio_ctx = None
-        self._http_session = None
-        self._http_ctx = None
+        self._stdio_session: Any | None = None
+        self._stdio_ctx: Any | None = None
+        self._http_session: Any | None = None
+        self._http_ctx: Any | None = None
 
     @property
     def is_http(self) -> bool:
@@ -109,12 +109,14 @@ class MCPClient:
             args=self.args,
             env={**_os.environ, **self.env} if self.env else None,
         )
-        self._stdio_ctx = stdio_client(params)
-        read_stream, write_stream = await self._stdio_ctx.__aenter__()
-        self._stdio_session = ClientSession(read_stream, write_stream)
-        await self._stdio_session.__aenter__()
-        await self._stdio_session.initialize()
-        return self._stdio_session
+        stdio_ctx = stdio_client(params)
+        self._stdio_ctx = stdio_ctx
+        read_stream, write_stream = await stdio_ctx.__aenter__()
+        stdio_session = ClientSession(read_stream, write_stream)
+        self._stdio_session = stdio_session
+        await stdio_session.__aenter__()
+        await stdio_session.initialize()
+        return stdio_session
 
     async def _get_http_session(self):
         """Create or return an MCP StreamableHTTP session."""
@@ -124,12 +126,14 @@ class MCPClient:
         from mcp.client.session import ClientSession
         from mcp.client.streamable_http import streamablehttp_client
 
-        self._http_ctx = streamablehttp_client(self.url)
-        read_stream, write_stream, _get_session_id = await self._http_ctx.__aenter__()
-        self._http_session = ClientSession(read_stream, write_stream)
-        await self._http_session.__aenter__()
-        await self._http_session.initialize()
-        return self._http_session
+        http_ctx = streamablehttp_client(self.url)
+        self._http_ctx = http_ctx
+        read_stream, write_stream, _get_session_id = await http_ctx.__aenter__()
+        http_session = ClientSession(read_stream, write_stream)
+        self._http_session = http_session
+        await http_session.__aenter__()
+        await http_session.initialize()
+        return http_session
 
     async def _send_jsonrpc(self, method: str, params: dict) -> Any:
         """Send a JSON-RPC request.
