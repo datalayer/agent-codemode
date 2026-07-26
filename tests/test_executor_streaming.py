@@ -19,13 +19,13 @@ class _StreamingSandbox:
         self.run_code_calls = 0
         self.streaming_called = False
 
-    def run_code(self, code: str, timeout=None) -> ExecutionResult:
-        _ = (code, timeout)
+    def run_code(self, code: str, **kwargs) -> ExecutionResult:
+        _ = (code, kwargs.get("timeout"), kwargs.get("language"), kwargs.get("envs"))
         self.run_code_calls += 1
         return ExecutionResult(logs=Logs())
 
-    def run_code_streaming(self, code: str, timeout=None):
-        _ = (code, timeout)
+    def run_code_streaming(self, code: str, **kwargs):
+        _ = (code, kwargs.get("timeout"), kwargs.get("language"), kwargs.get("envs"))
         self.streaming_called = True
         yield OutputMessage(line="status: RUNNING", timestamp=0.0, error=False)
         yield OutputMessage(line="hello", timestamp=0.0, error=False)
@@ -36,8 +36,8 @@ class _NonStreamingSandbox:
     def __init__(self) -> None:
         self.run_code_calls = 0
 
-    def run_code(self, code: str, timeout=None) -> ExecutionResult:
-        _ = (code, timeout)
+    def run_code(self, code: str, **kwargs) -> ExecutionResult:
+        _ = (code, kwargs.get("timeout"), kwargs.get("language"), kwargs.get("envs"))
         self.run_code_calls += 1
         if self.run_code_calls >= 3:
             return ExecutionResult(

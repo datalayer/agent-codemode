@@ -29,13 +29,60 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Optional
 
-from code_sandboxes import ExecutionResult, Sandbox, SandboxConfig  # type: ignore[import-untyped]
+from code_sandboxes import (  # type: ignore[import-untyped]
+    CodeSandboxClient,
+    ExecutionResult,
+    Sandbox,
+    SandboxConfig,
+)
 
 from ..discovery.codegen import PythonCodeGenerator
 from ..discovery.registry import ToolRegistry
 from ..types import CodeModeConfig, ToolCallResult
 
 logger = logging.getLogger(__name__)
+
+
+def _outcome_to_execution_result(outcome: Any) -> ExecutionResult:
+    """Convert CodeSandboxClient outcome objects to ExecutionResult."""
+    from code_sandboxes.models import CodeError, ExecutionResult, Logs, OutputMessage, Result
+
+    stdout_lines = [line for line in str(getattr(outcome, "stdout", "") or "").splitlines() if line]
+    stderr_lines = [line for line in str(getattr(outcome, "stderr", "") or "").splitlines() if line]
+    timestamp = time.time()
+
+    results = [
+        Result(data={"text/plain": text}, is_main_result=False, extra={})
+        for text in (getattr(outcome, "results", None) or [])
+    ]
+
+    code_error_payload = getattr(outcome, "code_error", None)
+    code_error = None
+    if isinstance(code_error_payload, dict):
+        code_error = CodeError(
+            name=str(code_error_payload.get("name", "Error") or "Error"),
+            value=str(code_error_payload.get("value", "") or ""),
+            traceback=str(code_error_payload.get("traceback", "") or ""),
+        )
+
+    return ExecutionResult(
+        logs=Logs(
+            stdout=[
+                OutputMessage(line=line, timestamp=timestamp, error=False)
+                for line in stdout_lines
+            ],
+            stderr=[
+                OutputMessage(line=line, timestamp=timestamp, error=True)
+                for line in stderr_lines
+            ],
+        ),
+        results=results,
+        code_error=code_error,
+        execution_ok=bool(getattr(outcome, "execution_ok", True)),
+        execution_error=getattr(outcome, "execution_error", None),
+        interrupted=bool(getattr(outcome, "interrupted", False)),
+        exit_code=getattr(outcome, "exit_code", None),
+    )
 
 
 def _get_identity_env() -> dict[str, str]:
@@ -1308,9 +1355,14 @@ async def __user_code__():
         import asyncio
 
         sandbox = self._require_sandbox()
+        sandbox_client = CodeSandboxClient(sandbox)
 
         # Run setup code in thread pool to avoid blocking event loop
-        await asyncio.to_thread(sandbox.run_code, setup_code, timeout=timeout)
+        await asyncio.to_thread(
+            sandbox_client.execute_code,
+            setup_code,
+            timeout=timeout,
+        )
 
         # Re-register the tool caller since the module cache was cleared
         # The __call_tool__ function was defined during initial setup and persists
@@ -1324,7 +1376,11 @@ except (ImportError, NameError) as e:
     import sys
     print(f"[EXECUTE] Failed to rewire tool caller: {type(e).__name__}: {e}", file=sys.stderr)
 """
-        await asyncio.to_thread(sandbox.run_code, tool_caller_rewire, timeout=timeout)
+        await asyncio.to_thread(
+            sandbox_client.execute_code,
+            tool_caller_rewire,
+            timeout=timeout,
+        )
 
         if hasattr(sandbox, "run_code_streaming"):
             from code_sandboxes.models import (
@@ -1341,7 +1397,7 @@ except (ImportError, NameError) as e:
                 code_error: CodeError | None = None
 
                 try:
-                    for event in sandbox.run_code_streaming(code, timeout=timeout):
+                    for event in sandbox_client.execute_code_streaming(code, timeout=timeout):
                         if hasattr(event, "line"):
                             message = OutputMessage(
                                 line=str(getattr(event, "line", "") or ""),
@@ -1383,7 +1439,8 @@ except (ImportError, NameError) as e:
 
         # Run user code in thread pool - this is where tool calls happen
         # and the kernel may call back to the MCP proxy
-        return await asyncio.to_thread(sandbox.run_code, code, timeout=timeout)
+        outcome = await asyncio.to_thread(sandbox_client.execute_code, code, timeout=timeout)
+        return _outcome_to_execution_result(outcome)
 
     def _indent_code(self, code: str, spaces: int) -> str:
         """Indent code by a number of spaces.
