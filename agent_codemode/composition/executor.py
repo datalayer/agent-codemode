@@ -45,7 +45,13 @@ logger = logging.getLogger(__name__)
 
 def _outcome_to_execution_result(outcome: Any) -> ExecutionResult:
     """Convert CodeSandboxClient outcome objects to ExecutionResult."""
-    from code_sandboxes.models import CodeError, ExecutionResult, Logs, OutputMessage, Result
+    from code_sandboxes.models import (  # type: ignore[import-untyped]
+        CodeError,
+        ExecutionResult,
+        Logs,
+        OutputMessage,
+        Result,
+    )
 
     stdout_lines = [line for line in str(getattr(outcome, "stdout", "") or "").splitlines() if line]
     stderr_lines = [line for line in str(getattr(outcome, "stderr", "") or "").splitlines() if line]
