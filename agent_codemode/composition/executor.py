@@ -189,7 +189,10 @@ class CodeModeExecutor:
         This checks the actual sandbox instance, not the config, to handle
         cases where an external sandbox is passed that differs from config.
         """
-        variant = self._sandbox_client.variant if self._sandbox_client else None
+        # Callers may inject any object implementing execute_code (tests use
+        # lightweight fakes), so treat a missing 'variant' as "not eval"
+        # rather than raising.
+        variant = getattr(self._sandbox_client, "variant", None) if self._sandbox_client else None
         return getattr(variant, "value", variant) == "eval"
 
     def _require_sandbox_client(self) -> CodeSandboxClient:
