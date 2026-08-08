@@ -34,7 +34,7 @@ except ImportError:
 
 try:
     from agent_skills import AgentSkillsToolset, SandboxExecutor
-    from code_sandboxes.eval_sandbox import EvalSandbox
+    from code_sandboxes import CodeSandboxClient
 
     HAS_AGENT_SKILLS = True
 except ImportError:
@@ -351,16 +351,16 @@ def create_agent(model: str, codemode: bool) -> tuple[Agent, object | None, obje
         )
 
         # Create shared sandbox for both CodemodeToolset and AgentSkillsToolset
-        shared_sandbox = None
+        shared_client = None
         skills_toolset = None
         if HAS_AGENT_SKILLS:
-            shared_sandbox = EvalSandbox()
-            logger.info("Created shared EvalSandbox for codemode and skills toolsets")
+            shared_client = CodeSandboxClient.create(variant="eval")
+            logger.info("Created shared CodeSandboxClient for codemode and skills")
 
         toolset = CodemodeToolset(
             registry=registry,
             config=config,
-            sandbox=shared_sandbox,
+            sandbox_client=shared_client,
             allow_discovery_tools=True,  # Enable discovery tools (search_tools, get_tool_details, list_tool_names, list_servers)
         )
         toolsets = [toolset]
@@ -369,7 +369,7 @@ def create_agent(model: str, codemode: bool) -> tuple[Agent, object | None, obje
         if HAS_AGENT_SKILLS:
             skills_toolset = AgentSkillsToolset(
                 directories=[str((repo_root / "skills").resolve())],
-                executor=SandboxExecutor(shared_sandbox),
+                executor=SandboxExecutor(shared_client),
             )
             toolsets.append(skills_toolset)
             logger.info(

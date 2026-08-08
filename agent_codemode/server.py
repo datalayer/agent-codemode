@@ -323,9 +323,9 @@ async def handle_execute_code(arguments: dict[str, Any]) -> dict[str, Any]:
         await executor.setup()
 
     # Inject context variables if provided
-    if context and executor._sandbox:
+    if context and executor.sandbox_client:
         for name, value in context.items():
-            executor._sandbox.set_variable(name, value)
+            executor.sandbox_client.set_variable(name, value)
 
     try:
         execution = await executor.execute(code, timeout=timeout)
