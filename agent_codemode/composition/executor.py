@@ -24,6 +24,7 @@ Identity Context Support:
 """
 
 import logging
+import sys
 import time
 from pathlib import Path
 from types import TracebackType
@@ -85,22 +86,24 @@ def _outcome_to_execution_result(outcome: Any) -> ExecutionResult:
 def _get_identity_env() -> dict[str, str]:
     """Get identity environment variables from request context.
 
-    This function attempts to import the identity context from agent_runtimes.
-    If not available (standalone codemode usage), returns empty dict.
+    agent_runtimes is deliberately not imported here: it depends on
+    agent_codemode, not the other way round, so importing it would invert the
+    dependency. The module is only looked up in ``sys.modules``. That loses
+    nothing, because the identities live in a module-level ContextVar that
+    only agent_runtimes itself can populate — if the module was never
+    imported, no identity can have been set.
 
     Returns:
-        Dictionary of environment variable names to token values.
+        Dictionary of environment variable names to token values, empty when
+        agent_runtimes is not in play (standalone codemode usage).
     """
+    identities = sys.modules.get("agent_runtimes.context.identities")
+    if identities is None:
+        return {}
     try:
-        import sys
-
-        identities = sys.modules.get("agent_runtimes.context.identities")
-        if identities is None:
-            return {}
-        get_identity_env = identities.get_identity_env
-
-        return get_identity_env()
+        return identities.get_identity_env()
     except Exception:
+        logger.debug("Could not read identity env context", exc_info=True)
         return {}
 
 
@@ -211,11 +214,9 @@ class CodeModeExecutor:
         This generates code bindings for all registered tools and
         prepares the sandbox environment.
         """
-        import sys as _sys
-
-        print(
-            f"[EXECUTOR.setup] Starting setup, sandbox_variant={self.config.sandbox_variant}",
-            file=_sys.stderr,
+        logger.debug(
+            "Starting setup, sandbox_variant=%s",
+            self.config.sandbox_variant,
         )
 
         # Generate code bindings on the host filesystem. Skip when running in
@@ -356,14 +357,9 @@ if skills_path not in sys.path:
         self._sandbox_client.execute_code(setup_code)
 
         # Register tool caller with the sandbox
-        import sys as _sys
-
-        print(
-            "[SETUP ENV DEBUG] About to register the code sandbox tool caller",
-            file=_sys.stderr,
-        )
+        logger.debug("About to register the code sandbox tool caller")
         self._sandbox_client.register_tool_caller(self.call_tool)
-        print("[SETUP ENV DEBUG] register_tool_caller called", file=_sys.stderr)
+        logger.debug("register_tool_caller called")
 
         # Verify __call_tool__ was set
         verify_code = """
@@ -377,9 +373,10 @@ except NameError:
 
         # For Jupyter/remote sandboxes, set up in-sandbox registry for tool calling
         # Use actual sandbox type detection, not config
-        print(
-            f"[SETUP ENV] is_local_eval={is_local_eval}, config.mcp_proxy_url={self.config.mcp_proxy_url}",
-            file=_sys.stderr,
+        logger.debug(
+            "is_local_eval=%s, config.mcp_proxy_url=%s",
+            is_local_eval,
+            self.config.mcp_proxy_url,
         )
         if not is_local_eval:
             # =======================================================================
