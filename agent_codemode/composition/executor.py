@@ -67,12 +67,10 @@ def _outcome_to_execution_result(outcome: Any) -> ExecutionResult:
     return ExecutionResult(
         logs=Logs(
             stdout=[
-                OutputMessage(line=line, timestamp=timestamp, error=False)
-                for line in stdout_lines
+                OutputMessage(line=line, timestamp=timestamp, error=False) for line in stdout_lines
             ],
             stderr=[
-                OutputMessage(line=line, timestamp=timestamp, error=True)
-                for line in stderr_lines
+                OutputMessage(line=line, timestamp=timestamp, error=True) for line in stderr_lines
             ],
         ),
         results=results,
@@ -1298,9 +1296,7 @@ except (ImportError, NameError) as e:
                                 code_error = CodeError(
                                     name=name,
                                     value=value,
-                                    traceback=str(
-                                        getattr(event, "traceback", "") or ""
-                                    ),
+                                    traceback=str(getattr(event, "traceback", "") or ""),
                                 )
 
                     return ExecutionResult(

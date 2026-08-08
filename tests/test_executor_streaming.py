@@ -10,8 +10,8 @@ import pytest
 from code_sandboxes import ExecutionResult, Logs, OutputMessage
 from code_sandboxes.models import Result
 
-from agent_codemode.composition.executor import CodeModeExecutor
 from agent_codemode.composition import executor as executor_module
+from agent_codemode.composition.executor import CodeModeExecutor
 from agent_codemode.discovery.registry import ToolRegistry
 
 
