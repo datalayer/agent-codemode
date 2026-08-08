@@ -99,7 +99,7 @@ if PYDANTIC_AI_AVAILABLE:
 
         registry: ToolRegistry | None = None
         config: CodeModeConfig = field(default_factory=CodeModeConfig)
-        sandbox: Any | None = None  # Optional pre-configured sandbox (e.g., EvalSandbox)
+        sandbox_client: Any | None = None
         allow_direct_tool_calls: bool | None = None
         allow_discovery_tools: bool = True
         tool_reranker: Callable[[list, str, Optional[str]], Awaitable[list]] | None = None
@@ -190,7 +190,7 @@ if PYDANTIC_AI_AVAILABLE:
                 self._executor = CodeModeExecutor(
                     registry=registry,
                     config=self.config,
-                    sandbox=self.sandbox,
+                    sandbox_client=self.sandbox_client,
                 )
                 await self._executor.setup()
                 logger.info(

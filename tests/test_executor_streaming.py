@@ -11,20 +11,23 @@ from code_sandboxes import ExecutionResult, Logs, OutputMessage
 from code_sandboxes.models import Result
 
 from agent_codemode.composition.executor import CodeModeExecutor
+from agent_codemode.composition import executor as executor_module
 from agent_codemode.discovery.registry import ToolRegistry
 
 
-class _StreamingSandbox:
+class _StreamingClient:
+    variant = "jupyter"
+
     def __init__(self) -> None:
         self.run_code_calls = 0
         self.streaming_called = False
 
-    def run_code(self, code: str, **kwargs) -> ExecutionResult:
+    def execute_code(self, code: str, **kwargs) -> ExecutionResult:
         _ = (code, kwargs.get("timeout"), kwargs.get("language"), kwargs.get("envs"))
         self.run_code_calls += 1
         return ExecutionResult(logs=Logs())
 
-    def run_code_streaming(self, code: str, **kwargs):
+    def execute_code_streaming(self, code: str, **kwargs):
         _ = (code, kwargs.get("timeout"), kwargs.get("language"), kwargs.get("envs"))
         self.streaming_called = True
         yield OutputMessage(line="status: RUNNING", timestamp=0.0, error=False)
@@ -32,43 +35,49 @@ class _StreamingSandbox:
         yield Result(data={"text/plain": "42"}, is_main_result=True, extra={})
 
 
-class _NonStreamingSandbox:
+class _FailingStreamingClient:
+    variant = "jupyter"
+
     def __init__(self) -> None:
         self.run_code_calls = 0
 
-    def run_code(self, code: str, **kwargs) -> ExecutionResult:
+    def execute_code(self, code: str, **kwargs) -> ExecutionResult:
         _ = (code, kwargs.get("timeout"), kwargs.get("language"), kwargs.get("envs"))
         self.run_code_calls += 1
-        if self.run_code_calls >= 3:
-            return ExecutionResult(
-                logs=Logs(stdout=[OutputMessage(line="fallback", timestamp=0.0, error=False)]),
-            )
         return ExecutionResult(logs=Logs())
+
+    def execute_code_streaming(self, code: str, **kwargs):
+        _ = (code, kwargs)
+        raise RuntimeError("sandbox unavailable")
+        yield
 
 
 @pytest.mark.asyncio
-async def test_execute_uses_streaming_when_supported():
+async def test_execute_uses_streaming_when_supported(monkeypatch):
+    monkeypatch.setattr(executor_module, "_get_identity_env", lambda: {})
     executor = CodeModeExecutor(registry=ToolRegistry())
-    sandbox = _StreamingSandbox()
-    executor._sandbox = sandbox
+    client = _StreamingClient()
+    executor._sandbox_client = client
     executor._setup_done = True
 
     result = await executor.execute("print('hi')")
 
-    assert sandbox.streaming_called is True
+    assert client.streaming_called is True
     assert "status: RUNNING" in result.logs.stdout_text
     assert "hello" in result.logs.stdout_text
     assert result.results and result.results[0].data["text/plain"] == "42"
 
 
 @pytest.mark.asyncio
-async def test_execute_falls_back_to_run_code_without_streaming():
+async def test_execute_reports_streaming_infrastructure_failure(monkeypatch):
+    monkeypatch.setattr(executor_module, "_get_identity_env", lambda: {})
     executor = CodeModeExecutor(registry=ToolRegistry())
-    sandbox = _NonStreamingSandbox()
-    executor._sandbox = sandbox
+    client = _FailingStreamingClient()
+    executor._sandbox_client = client
     executor._setup_done = True
 
     result = await executor.execute("print('hi')")
 
-    assert sandbox.run_code_calls >= 3
-    assert result.logs.stdout_text == "fallback"
+    assert client.run_code_calls >= 2
+    assert result.execution_ok is False
+    assert result.execution_error == "sandbox unavailable"

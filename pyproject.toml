@@ -21,21 +21,21 @@ classifiers = [
   "Programming Language :: Python :: 3",
 ]
 dependencies = [
-    "agent_skills",
-    "code_sandboxes",
-    "mcp[cli]>=1.0",
+    "agent-skills",
+    "code-sandboxes",
+    "mcp[cli]>=1.10.1,<2",
     "pydantic>=2.0",
     "httpx>=0.24",
 ]
 
 [project.optional-dependencies]
 pydantic-ai = [
-  "pydantic-graph>=1.94.0",
-  "pydantic-ai-slim>=1.94.0",
+  "pydantic-ai-slim>=2.21.0,<3",
+  "pydantic-graph>=2.21.0,<3",
 ]
 test = [
   "ipykernel",
-  "jupyter_server>=1.6,<3",
+  "jupyter-server>=2.10,<3",
   "pytest>=7.0",
   "pytest-asyncio>=0.21",
   "pytest-cov>=4.1",

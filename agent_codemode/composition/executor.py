@@ -32,7 +32,6 @@ from typing import Any, Optional
 from code_sandboxes import (  # type: ignore[import-untyped]
     CodeSandboxClient,
     ExecutionResult,
-    Sandbox,
     SandboxConfig,
 )
 
@@ -95,11 +94,12 @@ def _get_identity_env() -> dict[str, str]:
         Dictionary of environment variable names to token values.
     """
     try:
-        import importlib
+        import sys
 
-        get_identity_env = importlib.import_module(
-            "agent_runtimes.context.identities"
-        ).get_identity_env
+        identities = sys.modules.get("agent_runtimes.context.identities")
+        if identities is None:
+            return {}
+        get_identity_env = identities.get_identity_env
 
         return get_identity_env()
     except Exception:
@@ -141,19 +141,19 @@ class CodeModeExecutor:
         self,
         registry: ToolRegistry,
         config: Optional[CodeModeConfig] = None,
-        sandbox: Optional[Sandbox] = None,
+        sandbox_client: Optional[CodeSandboxClient] = None,
     ):
         """Initialize the executor.
 
         Args:
             registry: Tool registry with discovered tools.
             config: Executor configuration.
-            sandbox: Optional pre-configured sandbox. If not provided,
+            sandbox_client: Optional pre-configured client. If not provided,
                 creates one based on config.
         """
         self.registry = registry
         self.config = config or CodeModeConfig()
-        self._sandbox = sandbox
+        self._sandbox_client = sandbox_client
         self._codegen = PythonCodeGenerator(self.config.generated_path)
         self._setup_done = False
         self._tool_call_history: list[ToolCallResult] = []
@@ -191,17 +191,18 @@ class CodeModeExecutor:
         This checks the actual sandbox instance, not the config, to handle
         cases where an external sandbox is passed that differs from config.
         """
-        return self._sandbox is not None and hasattr(self._sandbox, "_namespaces")
+        variant = self._sandbox_client.variant if self._sandbox_client else None
+        return getattr(variant, "value", variant) == "eval"
 
-    def _require_sandbox(self) -> Sandbox:
-        if self._sandbox is None:
-            raise RuntimeError("Sandbox is not initialized")
-        return self._sandbox
+    def _require_sandbox_client(self) -> CodeSandboxClient:
+        if self._sandbox_client is None:
+            raise RuntimeError("Code sandbox client is not initialized")
+        return self._sandbox_client
 
     @property
-    def sandbox(self) -> Optional[Sandbox]:
-        """Get the sandbox instance."""
-        return self._sandbox
+    def sandbox_client(self) -> Optional[CodeSandboxClient]:
+        """Get the variant-neutral code sandbox client."""
+        return self._sandbox_client
 
     async def setup(self) -> None:
         """Set up the executor.
@@ -223,7 +224,7 @@ class CodeModeExecutor:
             self._codegen.generate_from_tools(tools_dict)
 
         # Create sandbox if not provided
-        if self._sandbox is None:
+        if self._sandbox_client is None:
             import os
 
             # Pass the complete environment to the sandbox
@@ -238,14 +239,14 @@ class CodeModeExecutor:
             sandbox_kwargs: dict[str, Any] = {}
             if self.config.sandbox_image:
                 sandbox_kwargs["image"] = self.config.sandbox_image
-            self._sandbox = Sandbox.create(
+            self._sandbox_client = CodeSandboxClient.create(
                 variant=self.config.sandbox_variant,
                 config=sandbox_config,
                 **sandbox_kwargs,
             )
 
         # Start the sandbox
-        self._sandbox.start()
+        self._sandbox_client.start()
 
         # Set up the generated module path in the sandbox
         await self._setup_sandbox_environment()
@@ -254,7 +255,7 @@ class CodeModeExecutor:
 
     async def _setup_sandbox_environment(self) -> None:
         """Set up the sandbox environment for tool execution."""
-        if self._sandbox is None:
+        if self._sandbox_client is None:
             return
 
         generated_path = Path(self.config.generated_path).resolve()
@@ -297,10 +298,10 @@ if not any(
 ):
     sys.meta_path.insert(0, _BlockGeneratedFinder())
 """
-            self._sandbox.run_code(purge_code)
+            self._sandbox_client.execute_code(purge_code)
             # Register the tool caller so ``call_tool`` still works inside
             # ``execute_code`` if the agent invokes it directly (raw MCP).
-            self._sandbox.register_tool_caller(self.call_tool)
+            self._sandbox_client.register_tool_caller(self.call_tool)
             return
 
         # For Jupyter/remote sandboxes, generate tools directly in the sandbox
@@ -351,16 +352,16 @@ if generated_path not in sys.path:
 if skills_path not in sys.path:
     sys.path.insert(0, str(skills_path))
 """
-        self._sandbox.run_code(setup_code)
+        self._sandbox_client.execute_code(setup_code)
 
         # Register tool caller with the sandbox
         import sys as _sys
 
         print(
-            f"[SETUP ENV DEBUG] About to call register_tool_caller, sandbox={self._sandbox} id={id(self._sandbox)}",
+            "[SETUP ENV DEBUG] About to register the code sandbox tool caller",
             file=_sys.stderr,
         )
-        self._sandbox.register_tool_caller(self.call_tool)
+        self._sandbox_client.register_tool_caller(self.call_tool)
         print("[SETUP ENV DEBUG] register_tool_caller called", file=_sys.stderr)
 
         # Verify __call_tool__ was set
@@ -371,7 +372,7 @@ try:
 except NameError:
     print("[VERIFY] __call_tool__ NOT SET after register_tool_caller!", file=sys.stderr)
 """
-        self._sandbox.run_code(verify_code)
+        self._sandbox_client.execute_code(verify_code)
 
         # For Jupyter/remote sandboxes, set up in-sandbox registry for tool calling
         # Use actual sandbox type detection, not config
@@ -512,7 +513,7 @@ async def __call_tool__(tool_name: str, arguments: dict) -> dict:
 
 print(f"[SETUP] HTTP proxy tool caller configured for {{__MCP_PROXY_URL__}}", file=sys.stderr)
 '''
-                self._sandbox.run_code(in_sandbox_http_caller_setup)
+                self._sandbox_client.execute_code(in_sandbox_http_caller_setup)
             else:
                 # Direct MCP Client Mode (legacy) - requires agent-codemode in sandbox
                 # This mode is used when MCP servers can be accessed directly from the sandbox
@@ -579,7 +580,7 @@ __executor__ = _SandboxExecutor(__sandbox_registry__)
 async def __call_tool__(tool_name, arguments):
     return await __sandbox_registry__.call_tool(tool_name, arguments)
 '''
-                self._sandbox.run_code(in_sandbox_registry_setup)
+                self._sandbox_client.execute_code(in_sandbox_registry_setup)
 
         # Set up the generated client to use __call_tool__
         caller_setup_code = """
@@ -590,7 +591,7 @@ except (ImportError, NameError) as e:
     import sys
     print(f"[SETUP] caller_setup_code error: {type(e).__name__}: {e}", file=sys.stderr)
 """
-        self._sandbox.run_code(caller_setup_code)
+        self._sandbox_client.execute_code(caller_setup_code)
 
     async def _generate_tools_in_sandbox(self) -> None:
         """Generate tool bindings directly in the remote sandbox.
@@ -599,7 +600,7 @@ except (ImportError, NameError) as e:
         we send the code generation logic to be executed in the sandbox.
         This way the generated modules exist in the sandbox's filesystem.
         """
-        if self._sandbox is None:
+        if self._sandbox_client is None:
             return
 
         # Get tool definitions for code generation
@@ -810,7 +811,7 @@ __all__ = {{__server_names__!r}}
 
 print(f"Generated tool bindings for {{len(__tools_data__)}} tools in {{__generated_path__}}")
 '''
-        self._sandbox.run_code(generation_code)
+        self._sandbox_client.execute_code(generation_code)
 
         # Generate skill bindings in the sandbox if skills metadata is available
         if self._skills_metadata:
@@ -832,7 +833,7 @@ print(f"Generated tool bindings for {{len(__tools_data__)}} tools in {{__generat
         has already run — for example when ``wire_skills_into_codemode`` sets
         the skills metadata *after* initial sandbox setup.
         """
-        if self._sandbox is None or not self._skills_metadata:
+        if self._sandbox_client is None or not self._skills_metadata:
             return
 
         # Skip for eval sandboxes (they use the on-disk generated files)
@@ -1060,7 +1061,7 @@ print(f"Generated skill bindings for {{len(__skills_metadata__)}} skills in {{__
 print(f"Skills source path: {{__skills_source_path__}}")
 print("Mode: direct execution (no MCP proxy)")
 '''
-        self._sandbox.run_code(skills_generation_code)
+        self._sandbox_client.execute_code(skills_generation_code)
 
     async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> Any:
         """Call a tool through the registry.
@@ -1136,7 +1137,7 @@ print("Mode: direct execution (no MCP proxy)")
         Raises:
             RuntimeError: If setup() hasn't been called.
         """
-        if not self._setup_done or self._sandbox is None:
+        if not self._setup_done or self._sandbox_client is None:
             raise RuntimeError("Executor not set up. Call setup() first.")
 
         self._in_execute = True
@@ -1200,147 +1201,19 @@ try:
 except Exception:
     pass
 """
-            # Branch based on actual sandbox type (already computed above)
-            if is_local_eval:
-                # For eval, we can access _namespaces directly
-                return await self._execute_local_eval(code, setup_code, timeout)
-            else:
-                # For Jupyter/remote sandboxes, use run_code()
-                return await self._execute_jupyter(code, setup_code, timeout)
+            return await self._execute_sandbox(code, setup_code, timeout)
         finally:
             self._in_execute = False
 
-    async def _execute_local_eval(
+    async def _execute_sandbox(
         self,
         code: str,
         setup_code: str,
         timeout: Optional[float] = None,
     ) -> ExecutionResult:
-        """Execute code in eval sandbox with direct namespace access."""
-        import io
-        import time
-        from contextlib import redirect_stderr, redirect_stdout
+        """Execute through the variant-neutral code sandbox client.
 
-        from code_sandboxes.models import (  # type: ignore[import-untyped]
-            ExecutionResult,
-            Logs,
-            OutputMessage,
-        )
-
-        sandbox = self._require_sandbox()
-
-        # Get the namespace directly
-        namespace = sandbox._namespaces[sandbox._default_context.id]
-
-        # Execute setup_code directly in namespace (avoids async wrapper issues)
-        exec(setup_code, namespace, namespace)
-
-        # Configure the generated.client tool caller if available
-        if "__call_tool__" in namespace:
-            try:
-                import importlib
-
-                set_tool_caller = importlib.import_module("generated.client").set_tool_caller
-                set_tool_caller(namespace["__call_tool__"])
-            except ImportError:
-                pass
-
-        # For async code, we need to handle it specially to avoid event loop conflicts
-        if "await " in code or "async " in code:
-            # Wrap user code in async function
-            def _indent_code(value: str, spaces: int) -> str:
-                indent = " " * spaces
-                return "\n".join(indent + line for line in value.split("\n"))
-
-            async_wrapper = f"""
-async def __user_code__():
-{_indent_code(code, 4)}
-    return locals()
-"""
-            # Execute the wrapper in namespace
-            exec(async_wrapper, namespace, namespace)
-
-            # Capture stdout/stderr
-            stdout_buffer = io.StringIO()
-            stderr_buffer = io.StringIO()
-
-            exit_code = None
-
-            # Call the async function directly (we're already in async context)
-            with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
-                coro = namespace["__user_code__"]()
-                try:
-                    locals_value = await coro
-                except SystemExit as exc:
-                    if isinstance(exc.code, int):
-                        exit_code = exc.code
-                    elif exc.code:
-                        exit_code = 1
-                    else:
-                        exit_code = 0
-                    locals_value = {}
-
-            # Update namespace with returned locals
-            if isinstance(locals_value, dict):
-                for key, value in locals_value.items():
-                    if key in (
-                        "__builtins__",
-                        "__name__",
-                        "__doc__",
-                        "__package__",
-                        "__loader__",
-                        "__spec__",
-                        "__annotations__",
-                        "__cached__",
-                        "__file__",
-                    ):
-                        continue
-                    namespace[key] = value
-
-            stdout_lines = stdout_buffer.getvalue().splitlines()
-            stderr_lines = stderr_buffer.getvalue().splitlines()
-            timestamp = time.time()
-
-            result = ExecutionResult(
-                execution_ok=True,
-                code_error=None,
-                exit_code=exit_code,
-                results=[],
-                logs=Logs(
-                    stdout=[
-                        OutputMessage(line=line, timestamp=timestamp, error=False)
-                        for line in stdout_lines
-                    ],
-                    stderr=[
-                        OutputMessage(line=line, timestamp=timestamp, error=True)
-                        for line in stderr_lines
-                    ],
-                ),
-                execution_count=sandbox._execution_count[sandbox._default_context.id],
-                context_id=sandbox._default_context.id,
-            )
-        else:
-            # For sync code, run in a worker thread so FastAPI's event loop
-            # stays responsive (e.g. sandbox status WS can emit is_executing).
-            import asyncio
-
-            result = await asyncio.to_thread(
-                sandbox.run_code,
-                code,
-                timeout=timeout,
-            )
-
-        return result
-
-    async def _execute_jupyter(
-        self,
-        code: str,
-        setup_code: str,
-        timeout: Optional[float] = None,
-    ) -> ExecutionResult:
-        """Execute code in Jupyter/remote sandbox using run_code().
-
-        IMPORTANT: The sandbox.run_code() is synchronous and blocks waiting
+        IMPORTANT: sandbox execution is synchronous and blocks waiting
         for the kernel to complete. When the kernel code calls back to the
         agent-runtimes server (e.g., via MCP proxy for tool calls), we need
         the event loop to be free to handle those requests. Therefore, we run
@@ -1354,8 +1227,7 @@ async def __user_code__():
         """
         import asyncio
 
-        sandbox = self._require_sandbox()
-        sandbox_client = CodeSandboxClient(sandbox)
+        sandbox_client = self._require_sandbox_client()
 
         # Run setup code in thread pool to avoid blocking event loop
         await asyncio.to_thread(
@@ -1382,7 +1254,7 @@ except (ImportError, NameError) as e:
             timeout=timeout,
         )
 
-        if hasattr(sandbox, "run_code_streaming"):
+        if hasattr(sandbox_client, "execute_code_streaming"):
             from code_sandboxes.models import (
                 CodeError,
                 Logs,
@@ -1395,6 +1267,7 @@ except (ImportError, NameError) as e:
                 stderr: list[OutputMessage] = []
                 results: list[Result] = []
                 code_error: CodeError | None = None
+                execution_error: str | None = None
 
                 try:
                     for event in sandbox_client.execute_code_streaming(code, timeout=timeout):
@@ -1417,17 +1290,25 @@ except (ImportError, NameError) as e:
                                 )
                             )
                         elif hasattr(event, "name") and hasattr(event, "value"):
-                            code_error = CodeError(
-                                name=str(getattr(event, "name", "Error") or "Error"),
-                                value=str(getattr(event, "value", "") or ""),
-                                traceback=str(getattr(event, "traceback", "") or ""),
-                            )
+                            name = str(getattr(event, "name", "Error") or "Error")
+                            value = str(getattr(event, "value", "") or "")
+                            if name == "SandboxExecutionError":
+                                execution_error = value
+                            else:
+                                code_error = CodeError(
+                                    name=name,
+                                    value=value,
+                                    traceback=str(
+                                        getattr(event, "traceback", "") or ""
+                                    ),
+                                )
 
                     return ExecutionResult(
                         logs=Logs(stdout=stdout, stderr=stderr),
                         results=results,
                         code_error=code_error,
-                        execution_ok=True,
+                        execution_ok=execution_error is None,
+                        execution_error=execution_error,
                     )
                 except Exception as exc:
                     return ExecutionResult(
@@ -1479,9 +1360,9 @@ except (ImportError, NameError) as e:
             raise ValueError(f"Skill not found: {skill_name}")
 
         # Set arguments as variables if provided
-        if arguments and self._sandbox:
+        if arguments and self._sandbox_client:
             for name, value in arguments.items():
-                self._sandbox.set_variable(name, value)
+                self._sandbox_client.set_variable(name, value)
 
         return await self.execute(skill.python_code or skill.content)
 
@@ -1496,9 +1377,9 @@ except (ImportError, NameError) as e:
 
     async def cleanup(self) -> None:
         """Clean up resources."""
-        if self._sandbox:
-            self._sandbox.stop()
-            self._sandbox = None
+        if self._sandbox_client:
+            self._sandbox_client.stop()
+            self._sandbox_client = None
         self._setup_done = False
 
     async def __aenter__(self) -> "CodeModeExecutor":

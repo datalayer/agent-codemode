@@ -280,7 +280,7 @@ class TestGenerateSkillsInSandbox:
             self.code_calls: list[str] = []
             self._started = True
 
-        def run_code(self, code: str, **kwargs):
+        def execute_code(self, code: str, **kwargs):
             self.code_calls.append(code)
             exec(compile(code, "<sandbox>", "exec"))
             from code_sandboxes.models import ExecutionResult
@@ -310,7 +310,7 @@ class TestGenerateSkillsInSandbox:
 
         # Inject a mock remote sandbox
         sandbox = self.MockRemoteSandbox()
-        executor._sandbox = sandbox
+        executor._sandbox_client = sandbox
 
         executor.set_skills_metadata(SAMPLE_SKILLS_METADATA)
         executor.generate_skills_in_sandbox()
@@ -339,7 +339,7 @@ class TestGenerateSkillsInSandbox:
         executor = CodeModeExecutor(registry=registry, config=config)
 
         sandbox = self.MockRemoteSandbox()
-        executor._sandbox = sandbox
+        executor._sandbox_client = sandbox
 
         executor.set_skills_metadata(SAMPLE_SKILLS_METADATA)
         executor.generate_skills_in_sandbox()
