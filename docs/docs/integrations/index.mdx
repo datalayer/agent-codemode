@@ -169,9 +169,13 @@ codemode_registry.add_server("database", {...})
 codemode = CodemodeToolset(codemode_registry)
 
 # Also connect to other MCP servers directly
-from pydantic_ai_slim.pydantic_ai.mcp import MCPServerStdio
+from pydantic_ai.mcp import FastMCPClient, MCPToolset, StdioTransport
 
-other_server = MCPServerStdio("npx", args=["@anthropic-ai/mcp-server-slack"])
+other_server = MCPToolset(
+    FastMCPClient(
+        StdioTransport("npx", args=["@anthropic-ai/mcp-server-slack"])
+    )
+)
 
 # Agent has both Code Mode and direct tool access
 agent = Agent(

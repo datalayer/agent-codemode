@@ -21,7 +21,7 @@ from typing import Optional
 
 try:
     from pydantic_ai import Agent
-    from pydantic_ai.mcp import MCPServerStdio
+    from pydantic_ai.mcp import FastMCPClient, MCPToolset, StdioTransport
 
     HAS_PYDANTIC_AI = True
 except ImportError:
@@ -369,10 +369,10 @@ def create_agent(model: str, codemode: bool) -> tuple[Agent, object | None, obje
         toolsets = [codemode_toolset, skills_toolset]
         toolset = codemode_toolset
     else:
-        mcp_server = MCPServerStdio(
-            sys.executable,
-            args=[mcp_server_path],
-            timeout=300.0,
+        mcp_server = MCPToolset(
+            FastMCPClient(StdioTransport(sys.executable, args=[mcp_server_path])),
+            init_timeout=300.0,
+            read_timeout=300.0,
         )
         toolsets = [mcp_server]
         toolset = None
