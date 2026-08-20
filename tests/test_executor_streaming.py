@@ -16,7 +16,7 @@ from agent_codemode.discovery.registry import ToolRegistry
 
 
 class _StreamingClient:
-    variant = "jupyter"
+    variant = "jupyter-server"
 
     def __init__(self) -> None:
         self.run_code_calls = 0
@@ -36,7 +36,7 @@ class _StreamingClient:
 
 
 class _FailingStreamingClient:
-    variant = "jupyter"
+    variant = "jupyter-server"
 
     def __init__(self) -> None:
         self.run_code_calls = 0

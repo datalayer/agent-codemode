@@ -197,7 +197,8 @@ class CodeModeConfig(BaseModel):
         sandbox_variant: Which sandbox to use for execution. One of the
             code-sandboxes variants: ``eval`` (in-process, default),
             ``monty`` (secure in-process interpreter), ``docker``,
-            ``jupyter``, ``colab``, ``kaggle``, ``modal``, or ``datalayer``.
+            ``jupyter-server``, ``google-colab``, ``kaggle``, ``modal``, or
+            ``datalayer``.
         sandbox_image: Optional sandbox image (for Docker-based sandboxes).
         sandbox_gpu: Optional GPU flavor / accelerator for supported sandboxes
             (for example Modal/Datalayer: ``T4``, ``A100``; Kaggle batch:
