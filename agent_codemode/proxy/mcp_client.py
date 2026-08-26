@@ -124,11 +124,14 @@ class MCPClient:
             return self._http_session
 
         from mcp.client.session import ClientSession
-        from mcp.client.streamable_http import streamablehttp_client
+        from mcp.client.streamable_http import streamable_http_client
 
-        http_ctx = streamablehttp_client(self.url)
+        # mcp 2: the transport yields the two streams only; the session id
+        # callback of mcp 1 is gone, and headers or timeouts would be set on
+        # an ``httpx2.AsyncClient`` passed as ``http_client``.
+        http_ctx = streamable_http_client(self.url)
         self._http_ctx = http_ctx
-        read_stream, write_stream, _get_session_id = await http_ctx.__aenter__()
+        read_stream, write_stream = await http_ctx.__aenter__()
         http_session = ClientSession(read_stream, write_stream)
         self._http_session = http_session
         await http_session.__aenter__()

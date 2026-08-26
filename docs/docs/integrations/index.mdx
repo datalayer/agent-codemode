@@ -136,13 +136,13 @@ python -m agent_codemode.server
 Or programmatically:
 
 ```python
-from agent_codemode import codemode_server, configure_server, ToolRegistry, MCPServerConfig
+from agent_codemode import configure_server, run_server, ToolRegistry, MCPServerConfig
 
 registry = ToolRegistry()
 registry.add_server(MCPServerConfig(name="filesystem", command="npx", args=["@anthropic-ai/mcp-server-filesystem"]))
 
 configure_server(registry=registry)
-codemode_server.run()
+run_server()
 ```
 
 The server exposes tools for:
