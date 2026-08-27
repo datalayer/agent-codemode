@@ -247,11 +247,11 @@ See [Integrations](./integrations/index.mdx) for complete documentation.
 
 **Exposed as an MCP Server:**
 ```python
-from agent_codemode import codemode_server, configure_server
+from agent_codemode import configure_server, run_server
 
 # Configure with your registry
 configure_server(config=config, registry=registry)
-codemode_server.run()
+run_server()
 ```
 
 Or run directly:
