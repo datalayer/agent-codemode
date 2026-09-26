@@ -702,7 +702,10 @@ async def call_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
 
     is_error = False
     if isinstance(result, dict):
-        is_error = result.get("isError", False)
+        is_error = result.get("isError", result.get("is_error", False))
+    elif hasattr(result, "is_error"):
+        # A ``CallToolResult`` of mcp 2, whose fields are snake_case.
+        is_error = result.is_error
     elif hasattr(result, "isError"):
         is_error = result.isError
 

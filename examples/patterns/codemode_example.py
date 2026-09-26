@@ -158,8 +158,9 @@ To start the server:
     # Configure with MCP servers
     configure_server()
 
-    # Run the MCP server (uses FastMCP under the hood)
-    codemode_server.run()
+    # Serve it over stdio (the MCP SDK's lowlevel Server under the hood)
+    from agent_codemode.server import run
+    run()
 
 Or from the command line:
 

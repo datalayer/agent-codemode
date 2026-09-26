@@ -353,8 +353,7 @@ When running Agent Codemode as an MCP server, skills are exposed through dedicat
 - **`run_skill`**: Execute a saved skill by name
 
 ```python
-from agent_codemode import codemode_server, configure_server
-from agent_codemode import CodeModeConfig
+from agent_codemode import CodeModeConfig, configure_server, run_server
 
 config = CodeModeConfig(
     skills_path="./skills",
@@ -362,7 +361,7 @@ config = CodeModeConfig(
 )
 
 configure_server(config=config)
-codemode_server.run()
+run_server()
 ```
 
 ## Pydantic AI Integration

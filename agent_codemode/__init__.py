@@ -49,6 +49,7 @@ from .proxy.mcp_client import MCPClient
 from .proxy.meta_tools import MetaToolProvider
 from .server import configure as configure_server
 from .server import mcp as codemode_server
+from .server import run as run_server
 from .toolset import PYDANTIC_AI_AVAILABLE, CodemodeToolset
 from .types import (
     CodeModeConfig,
@@ -90,6 +91,7 @@ __all__ = [
     "configure_server",
     "parallel",
     "retry",
+    "run_server",
     "run_with_timeout",
     "setup_skills_directory",
     # Helpers (from agent_skills)

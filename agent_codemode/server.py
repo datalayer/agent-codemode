@@ -25,7 +25,7 @@ from typing import Any, Optional, cast
 
 import anyio
 import mcp.types as types
-from mcp.server.lowlevel import Server
+from mcp.server import Server, ServerRequestContext
 
 from .composition.executor import CodeModeExecutor
 from .discovery.registry import ToolRegistry
@@ -33,8 +33,8 @@ from .types import CodeModeConfig
 
 logger = logging.getLogger(__name__)
 
-# Create the MCP server
-mcp = Server("codemode")
+# The MCP server is built at the end of this module, once its handlers
+# exist: mcp 2's lowlevel ``Server`` takes them as constructor arguments.
 
 # Global instances (configured at startup)
 _registry: Optional[ToolRegistry] = None
@@ -119,7 +119,7 @@ def _build_tools() -> list[types.Tool]:
             types.Tool(
                 name=name,
                 description=description,
-                inputSchema=parameters,
+                input_schema=parameters,
             )
         )
 
@@ -129,7 +129,7 @@ def _build_tools() -> list[types.Tool]:
             types.Tool(
                 name="save_skill",
                 description="Save a reusable skill (code-based tool composition).",
-                inputSchema={
+                input_schema={
                     "type": "object",
                     "required": ["name", "code", "description"],
                     "properties": {
@@ -144,7 +144,7 @@ def _build_tools() -> list[types.Tool]:
             types.Tool(
                 name="run_skill",
                 description="Execute a saved skill.",
-                inputSchema={
+                input_schema={
                     "type": "object",
                     "required": ["name"],
                     "properties": {
@@ -156,7 +156,7 @@ def _build_tools() -> list[types.Tool]:
             types.Tool(
                 name="list_skills",
                 description="List available skills.",
-                inputSchema={
+                input_schema={
                     "type": "object",
                     "properties": {
                         "tags": {"type": "array", "items": {"type": "string"}},
@@ -166,7 +166,7 @@ def _build_tools() -> list[types.Tool]:
             types.Tool(
                 name="delete_skill",
                 description="Delete a saved skill.",
-                inputSchema={
+                input_schema={
                     "type": "object",
                     "required": ["name"],
                     "properties": {
@@ -177,7 +177,7 @@ def _build_tools() -> list[types.Tool]:
             types.Tool(
                 name="get_execution_history",
                 description="Get recent tool execution history.",
-                inputSchema={
+                input_schema={
                     "type": "object",
                     "properties": {
                         "limit": {"type": "integer", "default": 10},
@@ -187,7 +187,7 @@ def _build_tools() -> list[types.Tool]:
             types.Tool(
                 name="add_mcp_server",
                 description="Add a new MCP server to discover tools from.",
-                inputSchema={
+                input_schema={
                     "type": "object",
                     "required": ["name"],
                     "properties": {
@@ -588,25 +588,47 @@ TOOL_HANDLERS = {
 # =============================================================================
 
 
-@mcp.list_tools()
-async def list_tools() -> list[types.Tool]:
+async def list_tools(
+    ctx: ServerRequestContext, params: types.PaginatedRequestParams | None
+) -> types.ListToolsResult:
     """Return the list of available tools."""
     config = _config or CodeModeConfig()
     if config.allow_direct_tool_calls:
-        return TOOLS
-    return [tool for tool in TOOLS if tool.name != "call_tool"]
+        return types.ListToolsResult(tools=TOOLS)
+    return types.ListToolsResult(tools=[tool for tool in TOOLS if tool.name != "call_tool"])
 
 
-@mcp.call_tool()
-async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextContent]:
-    """Handle tool calls."""
-    handler = TOOL_HANDLERS.get(name)
+async def call_tool(
+    ctx: ServerRequestContext, params: types.CallToolRequestParams
+) -> types.CallToolResult:
+    """Handle tool calls.
+
+    A failure is answered as a result with ``is_error`` set, the way mcp 1's
+    decorator did it: mcp 2's lowlevel server turns an exception raised here
+    into a JSON-RPC error instead, which an agent cannot read as a tool
+    outcome.
+    """
+    handler = TOOL_HANDLERS.get(params.name)
     if handler is None:
-        raise ValueError(f"Unknown tool: {name}")
+        return types.CallToolResult(
+            content=[types.TextContent(type="text", text=f"Unknown tool: {params.name}")],
+            is_error=True,
+        )
 
-    result = await handler(arguments)
+    try:
+        result = await handler(params.arguments or {})
+    except Exception as e:  # every failure is reported to the agent
+        logger.debug("Tool %s failed", params.name, exc_info=e)
+        return types.CallToolResult(
+            content=[types.TextContent(type="text", text=str(e))],
+            is_error=True,
+        )
     json_str = json.dumps(result, indent=2)
-    return [types.TextContent(type="text", text=json_str)]
+    return types.CallToolResult(content=[types.TextContent(type="text", text=json_str)])
+
+
+# Create the MCP server
+mcp = Server("codemode", on_list_tools=list_tools, on_call_tool=call_tool)
 
 
 # =============================================================================
@@ -629,26 +651,15 @@ def run(transport: str = "stdio", host: str = "127.0.0.1", port: int = 8000) -> 
 
     if transport == "streamable-http":
         import uvicorn
-        from mcp.server.streamable_http import StreamableHTTPServerTransport
-        from starlette.applications import Starlette
-        from starlette.routing import Route
 
-        async def handle_mcp(request):
-            transport_ctx: Any = StreamableHTTPServerTransport(
-                "/mcp", request.scope, request.receive, request._send
-            )
-            async with transport_ctx as transport:
-                await mcp.run(
-                    transport.read_stream,
-                    transport.write_stream,
-                    mcp.create_initialization_options(),
-                )
-
-        starlette_app = Starlette(
-            debug=True,
-            routes=[
-                Route("/mcp", endpoint=handle_mcp, methods=["POST"]),
-            ],
+        # Stateless, as before: each request is served on a transport of its
+        # own. ``host`` is passed on because the SDK enables DNS-rebinding
+        # protection, with a localhost-only allowlist, when it is a loopback
+        # address — a server bound elsewhere must not inherit that list.
+        starlette_app = mcp.streamable_http_app(
+            streamable_http_path="/mcp",
+            stateless_http=True,
+            host=host,
         )
 
         uvicorn.run(starlette_app, host=host, port=port)

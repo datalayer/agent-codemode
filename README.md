@@ -312,7 +312,7 @@ agent = Agent(
 Expose the programmatic tools as an MCP server for any MCP-compatible client:
 
 ```python
-from agent_codemode import codemode_server, configure_server
+from agent_codemode import configure_server, run_server
 from agent_codemode import ToolRegistry, MCPServerConfig, CodeModeConfig
 
 # Create and configure registry with MCP servers to compose
@@ -331,7 +331,7 @@ config = CodeModeConfig(
 )
 
 configure_server(config=config, registry=registry)
-codemode_server.run()
+run_server()  # stdio; run_server(transport="streamable-http", host=..., port=...) for HTTP
 ```
 
 Or start with command line:
@@ -469,14 +469,14 @@ When running in a sandbox, state can persist between `execute_code` calls within
 
 ## CI Workflows
 
-This repository uses a reusable GitHub Actions workflow at `.github/workflows/reusable-python.yml`.
+This repository uses a reusable GitHub Actions workflow at `.github/workflows/reusable-python.yaml`.
 
 The following workflows call it:
 
-- `.github/workflows/build.yml`
-- `.github/workflows/py-tests.yml`
-- `.github/workflows/py-code-style.yml`
-- `.github/workflows/py-typing.yml`
+- `.github/workflows/build.yaml`
+- `.github/workflows/py-tests.yaml`
+- `.github/workflows/py-code-style.yaml`
+- `.github/workflows/py-typing.yaml`
 
 Reusable workflow inputs:
 
