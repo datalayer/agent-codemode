@@ -469,14 +469,14 @@ When running in a sandbox, state can persist between `execute_code` calls within
 
 ## CI Workflows
 
-This repository uses a reusable GitHub Actions workflow at `.github/workflows/reusable-python.yml`.
+This repository uses a reusable GitHub Actions workflow at `.github/workflows/reusable-python.yaml`.
 
 The following workflows call it:
 
-- `.github/workflows/build.yml`
-- `.github/workflows/py-tests.yml`
-- `.github/workflows/py-code-style.yml`
-- `.github/workflows/py-typing.yml`
+- `.github/workflows/build.yaml`
+- `.github/workflows/py-tests.yaml`
+- `.github/workflows/py-code-style.yaml`
+- `.github/workflows/py-typing.yaml`
 
 Reusable workflow inputs:
 
